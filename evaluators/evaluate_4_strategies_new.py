@@ -49,8 +49,8 @@ DEFAULT_TEMPERATURE = 0.1
 DEFAULT_MAX_TOKENS = 500
 DEFAULT_TOP_K = 10
 
-SYSTEM_PROMPT_FILE = "prompts/templates/evaluation/system_prompt.txt"
-ANSWER_PROMPT_FILE = "prompts/templates/evaluation/answer_generation_prompt.txt"
+SYSTEM_PROMPT_FILE = "prompts/templates/evaluation/system_prompt_ver2.txt"
+ANSWER_PROMPT_FILE = "prompts/templates/evaluation/answer_generation_prompt_ver2.txt"
 
 
 def load_prompt(prompt_file: str) -> str:
@@ -99,6 +99,7 @@ def generate_version_tag(retriever_name: str, version: str = "v1") -> str:
     """버전 태그 생성"""
     date_str = datetime.now().strftime("%Y%m%d")
     return f"{retriever_name}_{date_str}_{version}"
+
 
 
 def create_trace_and_generation(
