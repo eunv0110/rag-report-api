@@ -60,6 +60,21 @@ DB_NAME = MODEL_CONFIG['embeddings'].get('db_name', 'default')
 QDRANT_PATH = str(DATA_DIR / "qdrant_data" / DB_NAME)
 QDRANT_COLLECTION = "notion_docs"
 
+def get_qdrant_path():
+    """현재 MODEL_PRESET 환경변수 기반으로 Qdrant 경로 동적 계산"""
+    config_path = BASE_DIR / "config" / "model_config.yaml"
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    preset_name = os.getenv("MODEL_PRESET", config.get("default_preset", "upstage"))
+
+    if "embedding_presets" in config and preset_name in config["embedding_presets"]:
+        db_name = config["embedding_presets"][preset_name].get('db_name', 'default')
+    else:
+        db_name = 'default'
+
+    return str(DATA_DIR / "qdrant_data" / db_name)
+
 # 디렉토리 생성
 DATA_DIR.mkdir(exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)

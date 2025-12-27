@@ -10,12 +10,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
-from config.settings import QDRANT_PATH, QDRANT_COLLECTION
+from config.settings import QDRANT_COLLECTION, get_qdrant_path
+
+# 싱글톤 패턴: 문서 캐싱 (Qdrant lock 방지)
+_documents_cache = {}
 
 
 def load_documents_from_qdrant() -> List[Document]:
     """Qdrant에서 모든 문서를 로드하여 LangChain Document로 변환"""
-    client = QdrantClient(path=QDRANT_PATH)
+    # Qdrant 경로 동적 계산
+    qdrant_path = get_qdrant_path()
+
+    # 캐시 확인 (같은 qdrant_path에서는 재사용)
+    if qdrant_path in _documents_cache:
+        return _documents_cache[qdrant_path]
+
+    client = QdrantClient(path=qdrant_path)
 
     try:
         # 모든 포인트 가져오기
@@ -28,15 +38,29 @@ def load_documents_from_qdrant() -> List[Document]:
 
         documents = []
         for point in scroll_result[0]:
-            # payload에서 직접 필드 가져오기 (page_content가 실제 content)
-            page_content = point.payload.get("page_content", "")
+            # payload 구조 감지 (두 가지 형식 지원)
+            # 형식 1: metadata 필드에 중첩 (upstage 등)
+            # 형식 2: payload 최상위에 직접 저장 (openai-large 등)
 
-            # metadata는 payload의 metadata 필드에 중첩되어 있음
-            metadata_dict = point.payload.get("metadata", {})
+            # page_content 추출 (여러 필드명 시도)
+            page_content = (
+                point.payload.get("page_content") or
+                point.payload.get("combined_text") or
+                point.payload.get("text") or
+                ""
+            )
 
             # 빈 문서는 건너뛰기
             if not page_content or not page_content.strip():
                 continue
+
+            # metadata 추출 (두 가지 구조 지원)
+            if "metadata" in point.payload:
+                # 형식 1: metadata 필드에 중첩
+                metadata_dict = point.payload["metadata"]
+            else:
+                # 형식 2: payload 최상위에 직접 저장
+                metadata_dict = point.payload
 
             # metadata 추출
             metadata = {
@@ -55,6 +79,9 @@ def load_documents_from_qdrant() -> List[Document]:
                 metadata=metadata
             )
             documents.append(doc)
+
+        # 캐시에 저장
+        _documents_cache[qdrant_path] = documents
 
         return documents
     finally:

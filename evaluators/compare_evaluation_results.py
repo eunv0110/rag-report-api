@@ -19,11 +19,10 @@ import json
 # ====================================================================
 # 데이터 경로 설정 (여기를 수정하세요)
 # ====================================================================
-FILE1_PATH = "/home/work/rag/Project/rag-report-generator/data/langfuse/upstage/eval_ensemble_rrf_ensemble_rrf_20251226_upstage_v1.csv"
-FILE2_PATH = "/home/work/rag/Project/rag-report-generator/data/langfuse/upstage/eval_rrf_longcontext_timeweighted_rrf_longcontext_timeweighted_20251226_upstage_v1.csv"
-FILE3_PATH = "/home/work/rag/Project/rag-report-generator/data/langfuse/upstage/eval_rrf_multiquery_longcontext_rrf_multiquery_longcontext_20251226_upstage_v1.csv"
-FILE4_PATH = "/home/work/rag/Project/rag-report-generator/data/langfuse/upstage/eval_rrf_multiquery_rrf_multiquery_20251226_upstage_v1.csv"
-
+FILE1_PATH="/home/work/rag/Project/rag-report-generator/data/langfuse/weekly/eval_qwen_rrf_multiquery_lc_weekly_report/eval_qwen_rrf_multiquery_lc_weekly_report_top6.csv"
+FILE2_PATH="/home/work/rag/Project/rag-report-generator/data/langfuse/weekly/eval_qwen_rrf_multiquery_lc_weekly_report/eval_qwen_rrf_multiquery_lc_weekly_report_top8.csv"
+FILE3_PATH="/home/work/rag/Project/rag-report-generator/data/langfuse/weekly/eval_qwen_rrf_multiquery_lc_weekly_report/eval_qwen_rrf_multiquery_lc_weekly_report_top10.csv"
+FILE4_PATH="/home/work/rag/Project/rag-report-generator/data/langfuse/weekly/eval_qwen_rrf_multiquery_lc_weekly_report/eval_qwen_rrf_multiquery_lc_weekly_report_top12.csv"
 OUTPUT_PATH = None  # 결과를 JSON으로 저장하려면 경로 지정 (예: "results/comparison.json")
 
 

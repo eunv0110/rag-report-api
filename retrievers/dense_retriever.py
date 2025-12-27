@@ -9,8 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from langchain_qdrant import QdrantVectorStore
 from langchain_core.retrievers import BaseRetriever
 from qdrant_client import QdrantClient
-from config.settings import QDRANT_PATH, QDRANT_COLLECTION
+from config.settings import QDRANT_COLLECTION, get_qdrant_path
 from models.embeddings.factory import get_embedder
+import os
+
+# 싱글톤 클라이언트 캐시 (Qdrant lock 방지)
+_qdrant_client_cache = {}
 
 
 def get_langchain_embeddings(embedder):
@@ -48,13 +52,13 @@ def get_langchain_embeddings(embedder):
     return CustomEmbeddings(embedder)
 
 
-def get_dense_retriever(k: int = 5, use_singleton: bool = False) -> BaseRetriever:
+def get_dense_retriever(k: int = 5, use_singleton: bool = True) -> BaseRetriever:
     """
     Dense Retriever 생성 (Qdrant 벡터 검색)
 
     Args:
         k: 반환할 문서 수
-        use_singleton: True면 기존 client를 재사용 (Qdrant lock 방지)
+        use_singleton: True면 기존 client를 재사용 (Qdrant lock 방지) - 기본값 True
 
     Returns:
         Qdrant VectorStore Retriever 인스턴스
@@ -63,8 +67,20 @@ def get_dense_retriever(k: int = 5, use_singleton: bool = False) -> BaseRetrieve
     base_embedder = get_embedder()
     langchain_embeddings = get_langchain_embeddings(base_embedder)
 
-    # Qdrant client 생성
-    client = QdrantClient(path=QDRANT_PATH)
+    # Qdrant 경로 동적 계산 (현재 MODEL_PRESET 기반)
+    qdrant_path = get_qdrant_path()
+    model_preset = os.getenv("MODEL_PRESET", "default")
+
+    # Qdrant client 생성 (싱글톤 사용 시 캐시에서 재사용)
+    # 캐시 키에 embedding preset 포함 (각 preset마다 별도 클라이언트)
+    cache_key = f"{model_preset}_{qdrant_path}_{QDRANT_COLLECTION}"
+
+    if use_singleton and cache_key in _qdrant_client_cache:
+        client = _qdrant_client_cache[cache_key]
+    else:
+        client = QdrantClient(path=qdrant_path)
+        if use_singleton:
+            _qdrant_client_cache[cache_key] = client
 
     # Qdrant vectorstore 로드
     vectorstore = QdrantVectorStore(

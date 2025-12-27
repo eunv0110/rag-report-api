@@ -22,6 +22,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# .env 파일 로드 (MODEL_PRESET 등 환경변수 사용을 위해)
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 import time
 import os
@@ -49,8 +53,8 @@ DEFAULT_TEMPERATURE = 0.1
 DEFAULT_MAX_TOKENS = 500
 DEFAULT_TOP_K = 10
 
-SYSTEM_PROMPT_FILE = "prompts/templates/evaluation/system_prompt_ver2.txt"
-ANSWER_PROMPT_FILE = "prompts/templates/evaluation/answer_generation_prompt_ver2.txt"
+SYSTEM_PROMPT_FILE = "prompts/templates/evaluation/system_prompt.txt"
+# ANSWER_PROMPT_FILE은 런타임에 설정됨 (--prompt-version 인자 기반)
 
 
 def load_prompt(prompt_file: str) -> str:
@@ -69,7 +73,7 @@ def load_evaluation_dataset(file_path: str) -> List[Dict[str, Any]]:
         return json.load(f)
 
 
-def generate_llm_answer(question: str, contexts: List[str]) -> str:
+def generate_llm_answer(question: str, contexts: List[str], prompt_version: int = 5) -> str:
     """LLM API를 호출하여 답변 생성"""
     if not AZURE_AI_CREDENTIAL or not AZURE_AI_ENDPOINT:
         return "Azure OpenAI 설정이 올바르지 않습니다. .env 파일을 확인하세요."
@@ -77,7 +81,8 @@ def generate_llm_answer(question: str, contexts: List[str]) -> str:
     os.environ['AZURE_AI_CREDENTIAL'] = AZURE_AI_CREDENTIAL
     os.environ['AZURE_AI_ENDPOINT'] = AZURE_AI_ENDPOINT
 
-    answer_prompt_template = load_prompt(ANSWER_PROMPT_FILE)
+    answer_prompt_file = f"prompts/templates/evaluation/weekly_report/answer_generation_prompt_ver{prompt_version}.txt"
+    answer_prompt_template = load_prompt(answer_prompt_file)
     context_text = "\n\n".join(contexts[:DEFAULT_NUM_CONTEXTS_FOR_ANSWER]) if contexts else "관련 문서를 찾을 수 없습니다."
     prompt = answer_prompt_template.replace("{{context}}", context_text).replace("{{question}}", question)
 
@@ -208,7 +213,8 @@ def evaluate_single_query(
     idx: int,
     top_k: int,
     base_version: str = "v1",
-    retriever_tags: List[str] = None
+    retriever_tags: List[str] = None,
+    prompt_version: int = 5
 ) -> Dict[str, Any]:
     """단일 쿼리 평가"""
     question = item["question"]
@@ -240,7 +246,7 @@ def evaluate_single_query(
         contexts = ["검색 결과가 없습니다."]
 
     # LLM 답변 생성
-    answer = generate_llm_answer(question, contexts)
+    answer = generate_llm_answer(question, contexts, prompt_version)
 
     if not answer or answer.startswith("답변 생성 실패") or answer.startswith("Azure OpenAI 설정"):
         print(f"  ⚠️ [{idx}] LLM answer generation failed!")
@@ -288,7 +294,8 @@ def evaluate_retriever(
     langfuse,
     top_k: int = DEFAULT_TOP_K,
     base_version: str = "v1",
-    retriever_tags: List[str] = None
+    retriever_tags: List[str] = None,
+    prompt_version: int = 5
 ) -> Dict[str, Any]:
     """리트리버 평가"""
     print(f"\n{'=' * 60}")
@@ -310,7 +317,8 @@ def evaluate_retriever(
             idx=idx,
             top_k=top_k,
             base_version=base_version,
-            retriever_tags=retriever_tags
+            retriever_tags=retriever_tags,
+            prompt_version=prompt_version
         )
 
         stats["evaluations"].append(eval_result)
@@ -394,7 +402,8 @@ def run_evaluation(
     dataset: str,
     top_k: int,
     version: str,
-    langfuse
+    langfuse,
+    prompt_version: int = 5
 ) -> bool:
     """단일 평가 전략 실행
 
@@ -404,6 +413,7 @@ def run_evaluation(
         top_k: Top-K 값
         version: 버전 태그
         langfuse: Langfuse 클라이언트
+        prompt_version: 프롬프트 버전 (2-6)
 
     Returns:
         성공 여부
@@ -439,11 +449,12 @@ def run_evaluation(
             langfuse=langfuse,
             top_k=top_k,
             base_version=version,
-            retriever_tags=retriever_tags
+            retriever_tags=retriever_tags,
+            prompt_version=prompt_version
         )
 
         # 결과 저장
-        output_file = Path(dataset).parent / f"{retriever_name}_evaluation_stats.json"
+        output_file = Path(dataset).parent / f"{retriever_name}_prompt_v{prompt_version}_evaluation_stats.json"
         save_result = {k: v for k, v in stats.items() if k != "evaluations"}
         save_result["num_evaluations"] = len(stats.get("evaluations", []))
         save_result["config"] = {
@@ -453,6 +464,7 @@ def run_evaluation(
             "retriever_tags": retriever_tags,
             "top_k": top_k,
             "version": version,
+            "prompt_version": prompt_version,
         }
 
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -512,6 +524,14 @@ def main():
         help="버전 태그 (기본값: v1)"
     )
 
+    parser.add_argument(
+        "--prompt-version",
+        type=int,
+        choices=[2, 3, 4, 5, 6, 7],
+        default=5,
+        help="프롬프트 버전 (2-7, 기본값: 5)"
+    )
+
     args = parser.parse_args()
 
     # 시작 메시지
@@ -522,6 +542,7 @@ def main():
     print(f"   - Dataset: {args.dataset}")
     print(f"   - Top-K: {args.top_k}")
     print(f"   - Version: {args.version}")
+    print(f"   - Prompt Version: {args.prompt_version}")
     print(f"   - 평가할 전략: {args.strategies}")
 
     # Langfuse 클라이언트 초기화
@@ -538,7 +559,8 @@ def main():
             dataset=args.dataset,
             top_k=args.top_k,
             version=args.version,
-            langfuse=langfuse
+            langfuse=langfuse,
+            prompt_version=args.prompt_version
         )
         results[strategy_num] = success
 
