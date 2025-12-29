@@ -33,6 +33,14 @@ def load_model_config():
 
 MODEL_CONFIG = load_model_config()
 
+def load_evaluation_config():
+    """평가 설정 파일 로드"""
+    config_path = BASE_DIR / "config" / "evaluation_config.yaml"
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+EVALUATION_CONFIG = load_evaluation_config()
+
 # Notion 설정
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 DATA_SOURCE_ID = os.getenv("DATA_SOURCE_ID")

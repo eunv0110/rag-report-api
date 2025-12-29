@@ -16,25 +16,36 @@ from config.settings import QDRANT_COLLECTION, get_qdrant_path
 _documents_cache = {}
 
 
-def load_documents_from_qdrant() -> List[Document]:
-    """Qdrant에서 모든 문서를 로드하여 LangChain Document로 변환"""
+def load_documents_from_qdrant(date_filter: tuple = None) -> List[Document]:
+    """
+    Qdrant에서 모든 문서를 로드하여 LangChain Document로 변환
+
+    Args:
+        date_filter: (start_date, end_date) 튜플 (ISO 형식)
+    """
     # Qdrant 경로 동적 계산
     qdrant_path = get_qdrant_path()
 
-    # 캐시 확인 (같은 qdrant_path에서는 재사용)
-    if qdrant_path in _documents_cache:
-        return _documents_cache[qdrant_path]
+    # 캐시 키에 date_filter 포함
+    cache_key = (qdrant_path, date_filter)
+
+    # 캐시 확인
+    if cache_key in _documents_cache:
+        return _documents_cache[cache_key]
 
     client = QdrantClient(path=qdrant_path)
 
     try:
-        # 모든 포인트 가져오기
-        scroll_result = client.scroll(
-            collection_name=QDRANT_COLLECTION,
-            limit=10000,
-            with_payload=True,
-            with_vectors=False  # 벡터는 필요 없음
-        )
+        # scroll 파라미터 설정
+        scroll_params = {
+            "collection_name": QDRANT_COLLECTION,
+            "limit": 10000,
+            "with_payload": True,
+            "with_vectors": False  # 벡터는 필요 없음
+        }
+
+        # 모든 포인트 가져오기 (날짜 필터링은 Python에서 처리)
+        scroll_result = client.scroll(**scroll_params)
 
         documents = []
         for point in scroll_result[0]:
@@ -62,6 +73,35 @@ def load_documents_from_qdrant() -> List[Document]:
                 # 형식 2: payload 최상위에 직접 저장
                 metadata_dict = point.payload
 
+            # 날짜 필터링 (Python 레벨에서 처리)
+            if date_filter:
+                start_date, end_date = date_filter
+
+                # properties에서 날짜 추출
+                properties = metadata_dict.get("properties", {})
+
+                # 새로운 날짜_start 필드 우선 사용 (vectordb 재구축 후)
+                date_start = properties.get("날짜_start", "")
+
+                # 날짜_start 필드가 없으면 기존 방식 사용 (하위 호환성)
+                if not date_start:
+                    last_edited = properties.get("최종 편집 일시", "")
+                    created = properties.get("생성 일시", "")
+
+                    # 날짜 범위 체크
+                    in_range = False
+                    for date_str in [last_edited, created]:
+                        if date_str and start_date <= date_str <= end_date:
+                            in_range = True
+                            break
+                else:
+                    # 날짜_start 필드로 필터링 (권장)
+                    in_range = date_start and start_date <= date_start <= end_date
+
+                # 범위 밖이면 건너뛰기
+                if not in_range:
+                    continue
+
             # metadata 추출
             metadata = {
                 "page_id": metadata_dict.get("page_id", ""),
@@ -81,7 +121,7 @@ def load_documents_from_qdrant() -> List[Document]:
             documents.append(doc)
 
         # 캐시에 저장
-        _documents_cache[qdrant_path] = documents
+        _documents_cache[cache_key] = documents
 
         return documents
     finally:
@@ -89,18 +129,26 @@ def load_documents_from_qdrant() -> List[Document]:
         client.close()
 
 
-def get_bm25_retriever(k: int = 5) -> BM25Retriever:
+def get_bm25_retriever(k: int = 5, date_filter: tuple = None) -> BM25Retriever:
     """
     BM25 Retriever 생성
 
     Args:
         k: 반환할 문서 수
+        date_filter: (start_date, end_date) 튜플 (ISO 형식)
 
     Returns:
         BM25Retriever 인스턴스
     """
     # Qdrant에서 문서 로드
-    documents = load_documents_from_qdrant()
+    documents = load_documents_from_qdrant(date_filter=date_filter)
+
+    # 문서가 없는 경우 처리
+    if not documents:
+        print(f"⚠️ 날짜 필터({date_filter})에 해당하는 문서가 없습니다.")
+        # 빈 retriever 반환 (최소 1개의 더미 문서 필요)
+        from langchain_core.documents import Document
+        documents = [Document(page_content="", metadata={})]
 
     # BM25 Retriever 생성
     retriever = BM25Retriever.from_documents(documents)

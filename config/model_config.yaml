@@ -52,8 +52,8 @@ default_preset: "upstage"
 
 vision:
   provider: "gpt4"
-  model: "openai/gpt-4o"  # ✅ Vision 지원
+  model: "openai/gpt-4o"  
   max_tokens: 300
-  api_key_env: "OPENROUTER_API_KEY"  # ✅ 같은 키
-  base_url: "https://openrouter.ai/api/v1"  # ✅ 같은 엔드포인트
+  api_key_env: "OPENROUTER_API_KEY" 
+  base_url: "https://openrouter.ai/api/v1"  
   prompt_template: "vision/image_description.txt"

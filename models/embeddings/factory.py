@@ -2,7 +2,7 @@ import os
 import yaml
 from pathlib import Path
 from langchain_core.embeddings import Embeddings
-from models.embeddings.openai_embedder import OpenAIEmbedder
+from models.embeddings.openrouter_embedder import OpenRouterEmbedder
 from models.embeddings.upstage_embedder import UpstageEmbedder
 
 # Singleton 패턴: 전역 embedder 인스턴스 (MODEL_PRESET별로 캐싱)
@@ -42,7 +42,7 @@ def get_embedder(config_path: str = None) -> Embeddings:
     provider = emb_config['provider']
 
     if provider == "openai":
-        embedder = OpenAIEmbedder(
+        embedder = OpenRouterEmbedder(
             model=emb_config['model'],
             api_key=os.getenv(emb_config['api_key_env']),
             base_url=emb_config['base_url'],
