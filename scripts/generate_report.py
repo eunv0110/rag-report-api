@@ -22,9 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import argparse
 from datetime import datetime
 
-from weekly_report_generator import WeeklyReportGenerator
-from executive_report_generator import ExecutiveReportGenerator
-from document_generator import DocumentGenerator
+from report_generator.report_generator import ReportGenerator
+from report_generator.document_generator import DocumentGenerator
 from utils.date_utils import parse_date_range
 
 
@@ -107,15 +106,12 @@ def main():
         end_date=args.end_date
     )
 
-    # 보고서 생성기 선택
-    if args.type == "weekly":
-        print("\n📊 주간 보고서 생성 시작...")
-        print("🔧 설정: BGE-M3 + RRF Ensemble (Top 6) + GPT-4.1")
-        generator = WeeklyReportGenerator()
-    else:
-        print("\n📊 최종 보고서 생성 시작...")
-        print("🔧 설정: OpenAI + RRF MultiQuery (Top 8) + DeepSeek-V3.1")
-        generator = ExecutiveReportGenerator()
+    # 통합 보고서 생성기 초기화
+    generator = ReportGenerator(report_type=args.type)
+
+    report_title = "주간 보고서" if args.type == "weekly" else "최종 보고서"
+    print(f"\n📊 {report_title} 생성 시작...")
+    print(f"🔧 설정: {generator.retriever_config['display_name']} + {generator.llm_config['display_name']}")
 
     # 질문 출력
     print(f"\n📝 질문 ({len(args.questions)}개):")
@@ -130,14 +126,14 @@ def main():
     # 보고서 생성
     report_data = generator.generate_report(args.questions, date_filter)
 
-    # 출력 경로를 results 디렉토리로 설정
-    results_dir = Path(__file__).parent / 'results'
-    results_dir.mkdir(exist_ok=True)
+    # 출력 경로를 data/reports 디렉토리로 설정
+    reports_dir = Path(__file__).parent.parent / 'data' / 'reports'
+    reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # 출력 파일명이 상대 경로나 파일명만 있는 경우 results 디렉토리에 저장
+    # 출력 파일명이 상대 경로나 파일명만 있는 경우 reports 디렉토리에 저장
     output_path = Path(args.output)
     if not output_path.is_absolute():
-        output_path = results_dir / output_path.name
+        output_path = reports_dir / output_path.name
 
     # JSON 저장
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
