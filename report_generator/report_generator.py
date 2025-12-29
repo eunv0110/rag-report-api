@@ -236,12 +236,32 @@ class ReportGenerator:
 
                 print(f"📝 답변:\n{answer}\n")
 
+                # 이미지 메타데이터 추출
+                images = []
+                for doc in docs:
+                    if doc.metadata.get('has_image', False):
+                        image_paths = doc.metadata.get('image_paths', [])
+                        image_descriptions = doc.metadata.get('image_descriptions', [])
+                        for img_path, img_desc in zip(image_paths, image_descriptions):
+                            images.append({
+                                'path': img_path,
+                                'description': img_desc,
+                                'source': doc.metadata.get('page_title', 'Unknown')
+                            })
+
+                if images:
+                    print(f"🖼️  첨부 이미지: {len(images)}개")
+                    for img in images:
+                        print(f"  - {img['path']} (출처: {img['source']})")
+                    print()
+
                 results.append({
                     "question_id": i,
                     "question": question,
                     "date_filter": f"{date_filter[0][:10]} ~ {date_filter[1][:10]}" if date_filter else None,
                     "num_docs": len(docs),
                     "doc_titles": [doc.metadata.get('page_title', 'Unknown') for doc in docs],
+                    "images": images,  # 이미지 정보 추가
                     "answer": answer,
                     "success": True
                 })
