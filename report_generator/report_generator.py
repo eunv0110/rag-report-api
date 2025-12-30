@@ -141,10 +141,10 @@ class ReportGenerator:
         """LLM으로 답변 생성"""
         # Context 구성
         context_parts = []
-        for i, doc in enumerate(docs, 1):
+        for doc in docs:
             title = doc.metadata.get('page_title', 'Unknown')
             content = doc.page_content
-            context_parts.append(f"[문서 {i}] {title}\n{content}\n")
+            context_parts.append(f"[{title}]\n{content}\n")
 
         context_text = "\n".join(context_parts)
 
