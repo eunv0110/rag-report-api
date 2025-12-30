@@ -636,13 +636,17 @@ class DocumentGenerator:
         # 보고서 제목 추가 (질문 기반)
         if results and results[0].get('question'):
             title = self._generate_report_title(results[0]['question'])
-            markdown_content.append(f'# {title}\n\n')
-
-            # 작성자 및 작성일자 추가
             author = report_data.get('author', 'Unknown')
             created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
-            markdown_content.append(f'**작성자:** {author}  |  **작성일:** {created_date}\n\n')
-            markdown_content.append('---\n\n')
+
+            # 제목, 작성자, 작성일을 포함한 헤더를 placeholder로 추가
+            # (Pandoc 변환 후 python-docx로 직접 스타일 적용)
+            markdown_content.append('[REPORT_HEADER]')
+            markdown_content.append(f'TITLE:{title}')
+            markdown_content.append(f'AUTHOR:{author}')
+            markdown_content.append(f'DATE:{created_date}')
+            markdown_content.append('[/REPORT_HEADER]')
+            markdown_content.append('\n')
 
         # 각 답변을 처리하며 표를 placeholder로 치환
         for result in results:
@@ -688,8 +692,14 @@ class DocumentGenerator:
             # Word 문서 열기
             doc = Document(output_path)
 
+            # 헤더(제목, 작성자, 작성일) 스타일 적용
+            self._format_report_header(doc)
+
             # Placeholder를 실제 표로 교체
             self._replace_placeholders_with_tables(doc, all_tables)
+
+            # 리스트 스타일 간격 조정
+            self._adjust_list_spacing(doc)
 
             # 수정된 문서 저장
             doc.save(output_path)
@@ -772,6 +782,126 @@ class DocumentGenerator:
 
         return tables
 
+    def _format_report_header(self, doc: Document):
+        """보고서 헤더(제목, 작성자, 작성일) 포맷 적용
+
+        Args:
+            doc: Word 문서 객체
+        """
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Pt, RGBColor
+
+        # [REPORT_HEADER] 블록 찾기 (Pandoc이 한 줄로 합칠 수 있음)
+        header_para = None
+        header_data = {}
+
+        for para in doc.paragraphs:
+            text = para.text.strip()
+
+            # Pandoc이 한 줄로 합친 경우
+            if '[REPORT_HEADER]' in text and '[/REPORT_HEADER]' in text:
+                header_para = para
+                # 정규식으로 추출
+                import re
+                title_match = re.search(r'TITLE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+AUTHOR:|$)', text)
+                author_match = re.search(r'AUTHOR:([^\s]+(?:\s+[^\s]+)*?)(?:\s+DATE:|$)', text)
+                date_match = re.search(r'DATE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+\[/REPORT_HEADER\]|$)', text)
+
+                if title_match:
+                    header_data['title'] = title_match.group(1).strip()
+                if author_match:
+                    header_data['author'] = author_match.group(1).strip()
+                if date_match:
+                    header_data['date'] = date_match.group(1).strip()
+
+                break
+
+        # 헤더 데이터가 있으면 포맷 적용
+        if header_data and header_para is not None:
+            # 기존 헤더 단락의 위치에 새로운 포맷 삽입
+            p_element = header_para._element
+            parent = p_element.getparent()
+            insert_index = parent.index(p_element)
+
+            # 제목 단락 생성 (중앙 정렬)
+            title_para = header_para
+            title_para.clear()
+            title_run = title_para.add_run(header_data.get('title', ''))
+            title_run.font.size = Pt(18)
+            title_run.font.bold = True
+            title_run.font.name = 'Malgun Gothic'
+            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # 작성자 및 작성일 단락 생성 (우측 정렬, 같은 줄)
+            info_para = doc.add_paragraph()
+            author_text = f"작성자: {header_data.get('author', 'Unknown')}"
+            date_text = f"작성일: {header_data.get('date', '')}"
+            info_run = info_para.add_run(f"{author_text}  |  {date_text}")
+            info_run.font.size = Pt(10)
+            info_run.font.name = 'Malgun Gothic'
+            info_run.font.color.rgb = RGBColor(100, 100, 100)
+            info_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+            # info_para를 title_para 바로 다음으로 이동
+            info_element = info_para._element
+            info_element.getparent().remove(info_element)
+            parent.insert(insert_index + 1, info_element)
+
+            # 구분선 추가
+            separator_para = doc.add_paragraph()
+            separator_run = separator_para.add_run('─' * 50)
+            separator_run.font.color.rgb = RGBColor(200, 200, 200)
+            separator_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # separator_para를 info_para 바로 다음으로 이동
+            sep_element = separator_para._element
+            sep_element.getparent().remove(sep_element)
+            parent.insert(insert_index + 2, sep_element)
+
+            # 빈 줄 추가
+            blank_para = doc.add_paragraph()
+            blank_element = blank_para._element
+            blank_element.getparent().remove(blank_element)
+            parent.insert(insert_index + 3, blank_element)
+
+            print(f"📋 보고서 헤더 포맷 적용 완료")
+
+    def _adjust_list_spacing(self, doc: Document):
+        """Word 문서의 리스트 항목 간격 조정
+
+        Args:
+            doc: Word 문서 객체
+        """
+        from docx.shared import Pt
+
+        adjusted_count = 0
+        for para in doc.paragraphs:
+            # 리스트 스타일인지 확인 (다양한 스타일 이름 대응)
+            if para.style:
+                style_name = para.style.name
+                # Pandoc은 "Compact", "Tight", "List" 등 다양한 스타일 사용
+                if ('List' in style_name or
+                    'Bullet' in style_name or
+                    'Compact' in style_name or
+                    'Tight' in style_name):
+                    # 단락 전후 간격 추가
+                    para.paragraph_format.space_before = Pt(4)
+                    para.paragraph_format.space_after = Pt(4)
+                    # 줄 간격 조정 (1.2 배수)
+                    para.paragraph_format.line_spacing = 1.2
+                    adjusted_count += 1
+
+        if adjusted_count > 0:
+            print(f"🔧 리스트 간격 조정 완료: {adjusted_count}개 항목")
+        else:
+            print(f"ℹ️  리스트 스타일을 찾지 못했습니다. 모든 단락에 간격 추가를 시도합니다...")
+            # 리스트 스타일이 없으면 모든 단락에 약간의 간격 추가
+            for para in doc.paragraphs:
+                if para.text.strip():  # 빈 단락 제외
+                    # 기존 간격이 없거나 매우 좁으면 간격 추가
+                    if para.paragraph_format.space_after is None or para.paragraph_format.space_after < Pt(3):
+                        para.paragraph_format.space_after = Pt(2)
+
     def _replace_placeholders_with_tables(self, doc: Document, markdown_tables: List[str]):
         """Word 문서의 placeholder를 python-docx 표로 교체
 
@@ -781,11 +911,10 @@ class DocumentGenerator:
         """
         from docx.table import Table
 
-        table_idx = 0
+        # Placeholder를 찾아서 교체 정보 수집
+        placeholders_to_replace = []
 
-        # 모든 단락을 순회하며 placeholder 찾기
-        for para_idx in range(len(doc.paragraphs)):
-            paragraph = doc.paragraphs[para_idx]
+        for paragraph in doc.paragraphs:
             text = paragraph.text.strip()
 
             # Placeholder 패턴 확인
@@ -797,68 +926,80 @@ class DocumentGenerator:
                     continue
 
                 if placeholder_num >= len(markdown_tables):
+                    print(f"⚠️ 표 {placeholder_num} 범위 초과 (전체 {len(markdown_tables)}개)")
                     continue
 
-                md_table = markdown_tables[placeholder_num]
+                placeholders_to_replace.append({
+                    'paragraph': paragraph,
+                    'table_num': placeholder_num,
+                    'md_table': markdown_tables[placeholder_num]
+                })
 
-                # 테이블 파싱
-                rows_data = self._parse_markdown_table(md_table)
-                if not rows_data:
-                    continue
+        # 수집한 placeholder를 표로 교체
+        for placeholder_info in placeholders_to_replace:
+            paragraph = placeholder_info['paragraph']
+            md_table = placeholder_info['md_table']
+            table_num = placeholder_info['table_num']
 
-                num_rows = len(rows_data)
-                num_cols = max(len(row) for row in rows_data)
+            # 테이블 파싱
+            rows_data = self._parse_markdown_table(md_table)
+            if not rows_data:
+                print(f"⚠️ 표 {table_num} 파싱 실패")
+                continue
 
-                # 각 행의 열 개수를 맞춤
-                for row in rows_data:
-                    while len(row) < num_cols:
-                        row.append('')
+            num_rows = len(rows_data)
+            num_cols = max(len(row) for row in rows_data)
 
-                # Placeholder 단락 위치에 테이블 삽입
-                p_element = paragraph._element
-                parent = p_element.getparent()
+            # 각 행의 열 개수를 맞춤
+            for row in rows_data:
+                while len(row) < num_cols:
+                    row.append('')
 
-                # 새 테이블 생성
-                tbl = doc.add_table(rows=num_rows, cols=num_cols)._element
+            # Placeholder 단락 위치에 테이블 삽입
+            p_element = paragraph._element
+            parent = p_element.getparent()
 
-                # Placeholder 단락 바로 앞에 테이블 삽입
-                parent.insert(parent.index(p_element), tbl)
+            # 새 테이블 생성
+            tbl = doc.add_table(rows=num_rows, cols=num_cols)._element
 
-                # 테이블 객체 가져오기 및 스타일 설정
-                new_table = Table(tbl, doc)
+            # Placeholder 단락 바로 앞에 테이블 삽입
+            parent.insert(parent.index(p_element), tbl)
 
+            # 테이블 객체 가져오기 및 스타일 설정
+            new_table = Table(tbl, doc)
+
+            try:
+                new_table.style = 'Light Grid Accent 1'
+            except:
                 try:
-                    new_table.style = 'Light Grid Accent 1'
+                    new_table.style = 'Table Grid'
                 except:
-                    try:
-                        new_table.style = 'Table Grid'
-                    except:
-                        pass
+                    pass
 
-                # 데이터 채우기
-                for i, row_data in enumerate(rows_data):
-                    for j, cell_data in enumerate(row_data):
-                        if j < num_cols and i < num_rows:
-                            cell = new_table.rows[i].cells[j]
-                            cell.text = str(cell_data) if cell_data else ''
+            # 데이터 채우기
+            for i, row_data in enumerate(rows_data):
+                for j, cell_data in enumerate(row_data):
+                    if j < num_cols and i < num_rows:
+                        cell = new_table.rows[i].cells[j]
+                        cell.text = str(cell_data) if cell_data else ''
 
-                            # 첫 행은 헤더로 볼드 처리
-                            if i == 0:
-                                for cell_para in cell.paragraphs:
-                                    for run in cell_para.runs:
-                                        run.bold = True
-                                        run.font.size = Pt(10)
-                                        run.font.name = 'Malgun Gothic'
-                            else:
-                                for cell_para in cell.paragraphs:
-                                    for run in cell_para.runs:
-                                        run.font.size = Pt(9)
-                                        run.font.name = 'Malgun Gothic'
+                        # 첫 행은 헤더로 볼드 처리
+                        if i == 0:
+                            for cell_para in cell.paragraphs:
+                                for run in cell_para.runs:
+                                    run.bold = True
+                                    run.font.size = Pt(10)
+                                    run.font.name = 'Malgun Gothic'
+                        else:
+                            for cell_para in cell.paragraphs:
+                                for run in cell_para.runs:
+                                    run.font.size = Pt(9)
+                                    run.font.name = 'Malgun Gothic'
 
-                # Placeholder 단락 삭제
-                p_element.getparent().remove(p_element)
+            # Placeholder 단락 삭제
+            p_element.getparent().remove(p_element)
 
-                print(f"✅ 표 {placeholder_num} 삽입 완료 ({num_rows}행 x {num_cols}열)")
+            print(f"✅ 표 {table_num} 삽입 완료 ({num_rows}행 x {num_cols}열)")
 
     def _replace_tables_in_word(self, doc: Document, markdown_tables: List[str]):
         """Word 문서의 테이블을 python-docx로 재생성한 테이블로 교체"""
