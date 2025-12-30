@@ -719,6 +719,11 @@ class DocumentGenerator:
 
         full_markdown = '\n'.join(markdown_content)
 
+        # 디버깅: 마크다운 일부 출력
+        print("🔍 생성된 마크다운 샘플 (첫 1000자):")
+        print(full_markdown[:1000])
+        print("...")
+
         # 임시 마크다운 파일 생성
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as tmp:
             tmp.write(full_markdown)
@@ -733,11 +738,14 @@ class DocumentGenerator:
             output_file = Path(output_path)
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
+            # Pandoc 변환 시 리스트 간격 옵션 추가
+            extra_args = []
+
             pypandoc.convert_file(
                 tmp_path,
                 'docx',
                 outputfile=str(output_file),
-                extra_args=['--reference-doc='] if False else []
+                extra_args=extra_args
             )
 
             print(f"📄 Pandoc 변환 완료, 표 삽입 중...")
@@ -759,8 +767,9 @@ class DocumentGenerator:
             print(f"✅ Word 문서 생성 완료: {output_path}")
 
         finally:
-            # 임시 파일 삭제
-            Path(tmp_path).unlink(missing_ok=True)
+            # 임시 파일 삭제 (디버깅을 위해 일시적으로 보존)
+            print(f"🔍 디버깅: 임시 마크다운 파일 보존됨 - {tmp_path}")
+            # Path(tmp_path).unlink(missing_ok=True)
 
     def _replace_tables_with_placeholders(self, text: str, start_index: int = 0) -> tuple:
         """마크다운 텍스트에서 표를 placeholder로 치환
@@ -943,12 +952,12 @@ class DocumentGenerator:
             print(f"📋 보고서 헤더 포맷 적용 완료")
 
     def _adjust_list_spacing(self, doc: Document):
-        """Word 문서의 리스트 항목 간격 조정
+        """Word 문서의 리스트 항목 간격 및 들여쓰기 조정
 
         Args:
             doc: Word 문서 객체
         """
-        from docx.shared import Pt
+        from docx.shared import Pt, Inches
 
         adjusted_count = 0
         for para in doc.paragraphs:
@@ -965,10 +974,16 @@ class DocumentGenerator:
                     para.paragraph_format.space_after = Pt(4)
                     # 줄 간격 조정 (1.2 배수)
                     para.paragraph_format.line_spacing = 1.2
+
+                    # 들여쓰기 간격 조정 (기본값의 절반으로 줄임)
+                    if para.paragraph_format.left_indent:
+                        # 현재 들여쓰기를 절반으로 줄임
+                        para.paragraph_format.left_indent = Inches(para.paragraph_format.left_indent.inches * 0.5)
+
                     adjusted_count += 1
 
         if adjusted_count > 0:
-            print(f"🔧 리스트 간격 조정 완료: {adjusted_count}개 항목")
+            print(f"🔧 리스트 간격 및 들여쓰기 조정 완료: {adjusted_count}개 항목")
         else:
             print(f"ℹ️  리스트 스타일을 찾지 못했습니다. 모든 단락에 간격 추가를 시도합니다...")
             # 리스트 스타일이 없으면 모든 단락에 약간의 간격 추가
