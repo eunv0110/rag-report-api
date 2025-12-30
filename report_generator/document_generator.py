@@ -207,14 +207,32 @@ class DocumentGenerator:
         rows = []
 
         for i, line in enumerate(lines):
-            # 구분선 스킵 (예: |---|---|)
-            if i == 1 and re.match(r'^\s*\|[\s\-:]+\|\s*$', line):
+            # 빈 줄 스킵
+            if not line.strip():
                 continue
 
-            # 셀 추출
-            cells = [cell.strip() for cell in line.split('|')]
-            # 앞뒤 빈 셀 제거
-            cells = [cell for cell in cells if cell]
+            # 테이블 행이 아니면 스킵
+            if '|' not in line:
+                continue
+
+            # 구분선 스킵 (예: |---|---|, | --- | --- |, |-----|-----|)
+            stripped = line.strip()
+            # 하이픈으로만 구성된 셀이 있으면 구분선으로 간주
+            temp_cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+            if temp_cells and all(set(cell) <= set('-: ') for cell in temp_cells):
+                continue
+
+            # 셀 추출: | 기준으로 분리
+            parts = line.split('|')
+
+            # 맨 앞뒤 빈 문자열 제거 (|로 시작하고 끝나는 경우)
+            if parts and not parts[0].strip():
+                parts = parts[1:]
+            if parts and not parts[-1].strip():
+                parts = parts[:-1]
+
+            # 각 셀의 앞뒤 공백만 제거 (빈 셀 유지)
+            cells = [cell.strip() for cell in parts]
 
             if cells:
                 rows.append(cells)
@@ -230,33 +248,44 @@ class DocumentGenerator:
         """
         rows_data = self._parse_markdown_table(table_text)
 
-        if not rows_data:
+        if not rows_data or len(rows_data) == 0:
+            print(f"⚠️ 테이블 파싱 실패 또는 빈 테이블")
             return
 
-        # Word 테이블 생성
+        # 모든 행의 열 개수 확인 (가장 많은 열을 기준으로)
+        num_cols = max(len(row) for row in rows_data)
         num_rows = len(rows_data)
-        num_cols = len(rows_data[0]) if rows_data else 0
 
+        # 각 행의 열 개수를 맞춤 (부족한 경우 빈 셀 추가)
+        for row in rows_data:
+            while len(row) < num_cols:
+                row.append('')
+
+        print(f"📊 테이블 생성: {num_rows}행 x {num_cols}열")
+
+        # Word 테이블 생성
         table = doc.add_table(rows=num_rows, cols=num_cols)
         table.style = 'Light Grid Accent 1'
 
         # 데이터 채우기
         for i, row_data in enumerate(rows_data):
             for j, cell_data in enumerate(row_data):
-                if j < len(table.rows[i].cells):
+                if j < num_cols and i < num_rows:
                     cell = table.rows[i].cells[j]
-                    cell.text = cell_data
+                    cell.text = str(cell_data) if cell_data else ''
 
                     # 첫 행은 헤더로 볼드 처리
                     if i == 0:
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
                                 run.bold = True
-                                run.font.size = Pt(11)
+                                run.font.size = Pt(10)
+                                run.font.name = 'Malgun Gothic'
                     else:
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
-                                run.font.size = Pt(10)
+                                run.font.size = Pt(9)
+                                run.font.name = 'Malgun Gothic'
 
         doc.add_paragraph()  # 테이블 뒤 간격
 
@@ -267,20 +296,53 @@ class DocumentGenerator:
             doc: Word 문서
             text: 마크다운 형식 텍스트
         """
-        # 테이블 감지 및 처리
-        table_pattern = r'(\|.+\|(?:\n\|.+\|)+)'
-        parts = re.split(table_pattern, text)
+        lines = text.split('\n')
+        i = 0
 
-        for part in parts:
-            if not part.strip():
-                continue
+        while i < len(lines):
+            line = lines[i]
 
-            # 테이블인 경우
-            if re.match(r'^\s*\|', part):
-                self._add_markdown_table(doc, part)
+            # 테이블 시작 감지: | 로 시작하고 끝나는 행
+            if line.strip().startswith('|') and '|' in line:
+                # 테이블 블록 수집
+                table_lines = []
+                start_i = i
+
+                # 연속된 테이블 행 수집
+                while i < len(lines):
+                    current_line = lines[i].strip()
+
+                    # 리스트 마커가 있는 경우 제거
+                    current_line = re.sub(r'^\s*[-*+]\s+', '', current_line)
+                    current_line = re.sub(r'^\s+', '', current_line)
+
+                    # 테이블 행인지 확인
+                    if current_line.startswith('|') and '|' in current_line:
+                        table_lines.append(current_line)
+                        i += 1
+                    else:
+                        # 테이블이 끝남
+                        break
+
+                # 수집한 테이블 블록 처리
+                if table_lines:
+                    table_text = '\n'.join(table_lines)
+                    print(f"🔍 테이블 감지 ({start_i}행부터 {len(table_lines)}줄):")
+                    print(table_text[:200] + '...' if len(table_text) > 200 else table_text)
+                    self._add_markdown_table(doc, table_text)
             else:
-                # 일반 텍스트 처리
-                self._add_formatted_paragraph(doc, part)
+                # 일반 텍스트 처리 - 다음 테이블까지의 모든 행 수집
+                text_lines = []
+                while i < len(lines):
+                    if lines[i].strip().startswith('|') and '|' in lines[i]:
+                        # 다음 테이블 발견
+                        break
+                    text_lines.append(lines[i])
+                    i += 1
+
+                if text_lines:
+                    paragraph_text = '\n'.join(text_lines)
+                    self._add_formatted_paragraph(doc, paragraph_text)
 
     def _add_formatted_paragraph(self, doc: Document, text: str):
         """마크다운 형식(볼드, 이탤릭, 리스트)을 Word로 변환
@@ -382,12 +444,13 @@ class DocumentGenerator:
         # Pandoc 사용 가능 여부 확인
         if PANDOC_AVAILABLE:
             try:
-                self._generate_word_with_pandoc(report_data, output_path)
+                self._generate_word_with_pandoc_and_tables(report_data, output_path)
                 return
             except Exception as e:
                 print(f"⚠️ Pandoc 변환 실패, 기본 방식으로 전환: {e}")
 
         # 기본 방식 (python-docx)
+        print("🔧 python-docx 방식으로 Word 생성 (테이블 지원)")
         self._generate_word_basic(report_data, output_path)
 
     def _remove_first_heading(self, text: str) -> str:
@@ -457,45 +520,454 @@ class DocumentGenerator:
         return '\n'.join(result_lines)
 
     def _fix_table_format(self, text: str) -> str:
-        """유니코드 박스 문자를 마크다운 테이블로 변환하고 구분선 추가"""
+        """유니코드 박스 문자를 마크다운 테이블로 변환하고 구분선 추가
+
+        리스트 안의 테이블을 독립적인 테이블 블록으로 변환
+        """
         # │ (유니코드 박스 문자)를 | (파이프)로 변환
         text = text.replace('│', '|')
         # ─ (유니코드 가로선)를 - (하이픈)로 변환
         text = text.replace('─', '-')
 
-        # 테이블 구조 수정: 구분선이 없는 테이블에 구분선 추가
         lines = text.split('\n')
         fixed_lines = []
+        in_table = False
+        table_buffer = []
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+
+            # 테이블 행인지 확인 (리스트 마커 포함)
+            is_table_line = False
+            clean_line = line
+
+            # 리스트 마커로 시작하는 테이블 행
+            if re.match(r'^\s*[-*+]\s+\|', line):
+                is_table_line = True
+                clean_line = re.sub(r'^\s*[-*+]\s+', '', line)
+            # 들여쓰기된 테이블 행
+            elif re.match(r'^\s+\|', line):
+                is_table_line = True
+                clean_line = stripped
+            # 일반 테이블 행
+            elif stripped.startswith('|') and stripped.endswith('|'):
+                is_table_line = True
+                clean_line = stripped
+
+            if is_table_line:
+                if not in_table:
+                    in_table = True
+                    # 테이블 시작 전에 빈 줄 추가
+                    if fixed_lines and fixed_lines[-1].strip():
+                        fixed_lines.append('')
+                table_buffer.append(clean_line)
+            else:
+                # 테이블이 끝났으면 버퍼 처리
+                if in_table:
+                    # 테이블 정리 및 추가
+                    self._finalize_table_buffer(table_buffer, fixed_lines)
+                    table_buffer = []
+                    in_table = False
+                    # 테이블 뒤에 빈 줄 추가
+                    fixed_lines.append('')
+
+                fixed_lines.append(line)
+
+        # 마지막 테이블 처리
+        if in_table and table_buffer:
+            if fixed_lines and fixed_lines[-1].strip():
+                fixed_lines.append('')
+            self._finalize_table_buffer(table_buffer, fixed_lines)
+            fixed_lines.append('')
+
+        return '\n'.join(fixed_lines)
+
+    def _finalize_table_buffer(self, table_buffer: list, output_lines: list):
+        """테이블 버퍼를 정리하고 출력 라인에 추가"""
+        if not table_buffer:
+            return
+
+        # 첫 번째 행이 헤더
+        header = table_buffer[0]
+
+        # 두 번째 행이 구분선인지 확인
+        has_separator = False
+        separator_idx = -1
+        data_start_idx = 1
+
+        # 버퍼에서 구분선 찾기 (첫 몇 행에서만)
+        for idx in range(1, min(3, len(table_buffer))):
+            line = table_buffer[idx].strip()
+            # 구분선 패턴: |-----|-----|  또는 | --- | --- |
+            if re.match(r'^\|[\s\-:|]+\|$', line) and '-' in line:
+                has_separator = True
+                separator_idx = idx
+                data_start_idx = idx + 1
+                break
+
+        # 헤더 추가
+        output_lines.append(header)
+
+        # 구분선 추가 (있으면 원본 사용, 없으면 생성)
+        if has_separator:
+            output_lines.append(table_buffer[separator_idx])
+        else:
+            num_cols = header.count('|') - 1
+            separator = '|' + '|'.join(['---' for _ in range(num_cols)]) + '|'
+            output_lines.append(separator)
+
+        # 나머지 데이터 행 추가
+        for row in table_buffer[data_start_idx:]:
+            output_lines.append(row)
+
+    def _generate_word_with_pandoc_and_tables(self, report_data: Dict[str, Any], output_path: str):
+        """Pandoc + python-docx 하이브리드 방식으로 Word 생성
+
+        표는 python-docx로 직접 생성하고, 나머지는 pandoc으로 변환
+        표는 원래 마크다운에 있던 위치에 정확히 배치
+        """
+        print("🔧 하이브리드 방식: 표는 python-docx, 나머지는 Pandoc")
+
+        # 결과 수집 및 표 추출
+        results = report_data.get('results', [])
+        markdown_content = []
+        all_tables = []  # 모든 표를 순서대로 저장
+
+        # 보고서 제목 추가 (질문 기반)
+        if results and results[0].get('question'):
+            title = self._generate_report_title(results[0]['question'])
+            markdown_content.append(f'# {title}\n\n')
+
+            # 작성자 및 작성일자 추가
+            author = report_data.get('author', 'Unknown')
+            created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
+            markdown_content.append(f'**작성자:** {author}  |  **작성일:** {created_date}\n\n')
+            markdown_content.append('---\n\n')
+
+        # 각 답변을 처리하며 표를 placeholder로 치환
+        for result in results:
+            if result.get('success'):
+                answer = result.get('answer', 'N/A')
+                # 테이블 형식 수정
+                answer = self._fix_table_format(answer)
+                # "임원보고서" 헤딩 제거
+                answer = self._remove_first_heading(answer)
+
+                # 표를 placeholder로 치환
+                answer_with_placeholders, tables = self._replace_tables_with_placeholders(answer, len(all_tables))
+                all_tables.extend(tables)
+
+                markdown_content.append(answer_with_placeholders)
+                markdown_content.append('\n\n')
+
+        full_markdown = '\n'.join(markdown_content)
+
+        # 임시 마크다운 파일 생성
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as tmp:
+            tmp.write(full_markdown)
+            tmp_path = tmp.name
+
+        print(f"📝 임시 마크다운 파일: {tmp_path}")
+        if all_tables:
+            print(f"📊 총 {len(all_tables)}개의 표 발견")
+
+        try:
+            # Pandoc으로 변환
+            output_file = Path(output_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            pypandoc.convert_file(
+                tmp_path,
+                'docx',
+                outputfile=str(output_file),
+                extra_args=['--reference-doc='] if False else []
+            )
+
+            print(f"📄 Pandoc 변환 완료, 표 삽입 중...")
+
+            # Word 문서 열기
+            doc = Document(output_path)
+
+            # Placeholder를 실제 표로 교체
+            self._replace_placeholders_with_tables(doc, all_tables)
+
+            # 수정된 문서 저장
+            doc.save(output_path)
+            print(f"✅ Word 문서 생성 완료: {output_path}")
+
+        finally:
+            # 임시 파일 삭제
+            Path(tmp_path).unlink(missing_ok=True)
+
+    def _replace_tables_with_placeholders(self, text: str, start_index: int = 0) -> tuple:
+        """마크다운 텍스트에서 표를 placeholder로 치환
+
+        Args:
+            text: 마크다운 텍스트
+            start_index: 표 번호 시작 인덱스
+
+        Returns:
+            (치환된 텍스트, 추출된 표 리스트)
+        """
+        lines = text.split('\n')
+        result_lines = []
+        tables = []
+        i = 0
+        table_index = start_index
+
+        while i < len(lines):
+            line = lines[i]
+
+            # 테이블 시작 감지
+            if line.strip().startswith('|') and '|' in line:
+                table_lines = []
+
+                # 연속된 테이블 행 수집
+                while i < len(lines):
+                    current_line = lines[i].strip()
+                    if current_line.startswith('|') and '|' in current_line:
+                        table_lines.append(current_line)
+                        i += 1
+                    else:
+                        break
+
+                if table_lines:
+                    # 표를 저장하고 placeholder 삽입
+                    table_text = '\n'.join(table_lines)
+                    tables.append(table_text)
+                    result_lines.append(f'[TABLE_{table_index}]')
+                    table_index += 1
+            else:
+                result_lines.append(line)
+                i += 1
+
+        return '\n'.join(result_lines), tables
+
+    def _extract_tables_from_markdown(self, text: str) -> List[str]:
+        """마크다운 텍스트에서 테이블 추출"""
+        tables = []
+        lines = text.split('\n')
         i = 0
 
         while i < len(lines):
             line = lines[i]
 
-            # 파이프로 시작하는 행 감지 (잠재적 테이블 행)
-            if line.strip().startswith('|') and line.strip().endswith('|'):
-                # 테이블 시작
-                table_lines = [line]
-                i += 1
+            # 테이블 시작 감지
+            if line.strip().startswith('|') and '|' in line:
+                table_lines = []
 
-                # 다음 행이 구분선인지 확인
-                if i < len(lines):
-                    next_line = lines[i].strip()
+                # 연속된 테이블 행 수집
+                while i < len(lines):
+                    current_line = lines[i].strip()
+                    if current_line.startswith('|') and '|' in current_line:
+                        table_lines.append(current_line)
+                        i += 1
+                    else:
+                        break
 
-                    # 구분선이 아니면 (데이터 행이면) 구분선 추가
-                    if next_line.startswith('|') and not re.match(r'^\s*\|[\s\-:]+\|\s*$', next_line):
-                        # 첫 번째 행의 열 개수만큼 구분선 생성
-                        num_cols = line.count('|') - 1
-                        separator = '|' + '|'.join(['---' for _ in range(num_cols)]) + '|'
-                        fixed_lines.append(line)
-                        fixed_lines.append(separator)
-                        continue
-
-                fixed_lines.append(line)
+                if table_lines:
+                    tables.append('\n'.join(table_lines))
             else:
-                fixed_lines.append(line)
                 i += 1
 
-        return '\n'.join(fixed_lines)
+        return tables
+
+    def _replace_placeholders_with_tables(self, doc: Document, markdown_tables: List[str]):
+        """Word 문서의 placeholder를 python-docx 표로 교체
+
+        Args:
+            doc: Word 문서 객체
+            markdown_tables: 마크다운 표 리스트 (순서대로)
+        """
+        from docx.table import Table
+
+        table_idx = 0
+
+        # 모든 단락을 순회하며 placeholder 찾기
+        for para_idx in range(len(doc.paragraphs)):
+            paragraph = doc.paragraphs[para_idx]
+            text = paragraph.text.strip()
+
+            # Placeholder 패턴 확인
+            if text.startswith('[TABLE_') and text.endswith(']'):
+                # 표 번호 추출
+                try:
+                    placeholder_num = int(text[7:-1])  # [TABLE_X]에서 X 추출
+                except:
+                    continue
+
+                if placeholder_num >= len(markdown_tables):
+                    continue
+
+                md_table = markdown_tables[placeholder_num]
+
+                # 테이블 파싱
+                rows_data = self._parse_markdown_table(md_table)
+                if not rows_data:
+                    continue
+
+                num_rows = len(rows_data)
+                num_cols = max(len(row) for row in rows_data)
+
+                # 각 행의 열 개수를 맞춤
+                for row in rows_data:
+                    while len(row) < num_cols:
+                        row.append('')
+
+                # Placeholder 단락 위치에 테이블 삽입
+                p_element = paragraph._element
+                parent = p_element.getparent()
+
+                # 새 테이블 생성
+                tbl = doc.add_table(rows=num_rows, cols=num_cols)._element
+
+                # Placeholder 단락 바로 앞에 테이블 삽입
+                parent.insert(parent.index(p_element), tbl)
+
+                # 테이블 객체 가져오기 및 스타일 설정
+                new_table = Table(tbl, doc)
+
+                try:
+                    new_table.style = 'Light Grid Accent 1'
+                except:
+                    try:
+                        new_table.style = 'Table Grid'
+                    except:
+                        pass
+
+                # 데이터 채우기
+                for i, row_data in enumerate(rows_data):
+                    for j, cell_data in enumerate(row_data):
+                        if j < num_cols and i < num_rows:
+                            cell = new_table.rows[i].cells[j]
+                            cell.text = str(cell_data) if cell_data else ''
+
+                            # 첫 행은 헤더로 볼드 처리
+                            if i == 0:
+                                for cell_para in cell.paragraphs:
+                                    for run in cell_para.runs:
+                                        run.bold = True
+                                        run.font.size = Pt(10)
+                                        run.font.name = 'Malgun Gothic'
+                            else:
+                                for cell_para in cell.paragraphs:
+                                    for run in cell_para.runs:
+                                        run.font.size = Pt(9)
+                                        run.font.name = 'Malgun Gothic'
+
+                # Placeholder 단락 삭제
+                p_element.getparent().remove(p_element)
+
+                print(f"✅ 표 {placeholder_num} 삽입 완료 ({num_rows}행 x {num_cols}열)")
+
+    def _replace_tables_in_word(self, doc: Document, markdown_tables: List[str]):
+        """Word 문서의 테이블을 python-docx로 재생성한 테이블로 교체"""
+        from docx.oxml import OxmlElement
+
+        # 텍스트로 렌더링된 테이블 행들을 찾아서 삭제하고 그 자리에 실제 테이블 삽입
+        paragraphs_to_remove = []
+        table_insert_positions = []
+
+        i = 0
+        while i < len(doc.paragraphs):
+            paragraph = doc.paragraphs[i]
+            text = paragraph.text.strip()
+
+            # 테이블 시작 감지 (| 로 시작하는 줄)
+            if text.startswith('|') and '|' in text and len(text) > 10:
+                # 테이블 블록의 모든 단락 수집
+                table_paragraphs = [paragraph]
+                table_start_idx = i
+                j = i + 1
+
+                # 연속된 테이블 행들 찾기
+                while j < len(doc.paragraphs):
+                    next_para = doc.paragraphs[j]
+                    next_text = next_para.text.strip()
+
+                    if next_text.startswith('|') and '|' in next_text:
+                        table_paragraphs.append(next_para)
+                        j += 1
+                    else:
+                        break
+
+                # 이 위치에 테이블 삽입 예정
+                if table_paragraphs and markdown_tables:
+                    table_insert_positions.append({
+                        'start_para': table_paragraphs[0],
+                        'paragraphs': table_paragraphs,
+                        'markdown_table': markdown_tables.pop(0)
+                    })
+
+                i = j
+            else:
+                i += 1
+
+        # 역순으로 처리 (인덱스 변경 방지)
+        for pos_info in reversed(table_insert_positions):
+            start_para = pos_info['start_para']
+            paragraphs = pos_info['paragraphs']
+            md_table = pos_info['markdown_table']
+
+            # 테이블 파싱
+            rows_data = self._parse_markdown_table(md_table)
+            if not rows_data:
+                continue
+
+            num_rows = len(rows_data)
+            num_cols = max(len(row) for row in rows_data)
+
+            # 각 행의 열 개수를 맞춤
+            for row in rows_data:
+                while len(row) < num_cols:
+                    row.append('')
+
+            # 첫 번째 단락 위치에 테이블 삽입
+            p_element = start_para._element
+            parent = p_element.getparent()
+
+            # 새 테이블 생성 (단락 앞에 삽입)
+            from docx.table import Table
+            tbl = doc.add_table(rows=num_rows, cols=num_cols)._element
+
+            # 단락 바로 앞에 테이블 삽입
+            parent.insert(parent.index(p_element), tbl)
+
+            # 테이블 객체 가져오기
+            new_table = Table(tbl, doc)
+
+            try:
+                new_table.style = 'Light Grid Accent 1'
+            except:
+                try:
+                    new_table.style = 'Table Grid'
+                except:
+                    pass
+
+            # 데이터 채우기
+            for i, row_data in enumerate(rows_data):
+                for j, cell_data in enumerate(row_data):
+                    if j < num_cols and i < num_rows:
+                        cell = new_table.rows[i].cells[j]
+                        cell.text = str(cell_data) if cell_data else ''
+
+                        # 첫 행은 헤더로 볼드 처리
+                        if i == 0:
+                            for paragraph in cell.paragraphs:
+                                for run in paragraph.runs:
+                                    run.bold = True
+                                    run.font.size = Pt(10)
+                                    run.font.name = 'Malgun Gothic'
+                        else:
+                            for paragraph in cell.paragraphs:
+                                for run in paragraph.runs:
+                                    run.font.size = Pt(9)
+                                    run.font.name = 'Malgun Gothic'
+
+            # 테이블에 해당하는 텍스트 단락들 삭제
+            for para in paragraphs:
+                p = para._element
+                p.getparent().remove(p)
 
     def _generate_word_with_pandoc(self, report_data: Dict[str, Any], output_path: str):
         """Pandoc을 사용한 Word 생성 (마크다운 완벽 지원)"""
@@ -507,6 +979,12 @@ class DocumentGenerator:
         if results and results[0].get('question'):
             title = self._generate_report_title(results[0]['question'])
             markdown_content.append(f'# {title}\n\n')
+
+            # 작성자 및 작성일자 추가
+            author = report_data.get('author', 'Unknown')
+            created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
+            markdown_content.append(f'**작성자:** {author}  |  **작성일:** {created_date}\n\n')
+            markdown_content.append('---\n\n')
 
         for result in results:
             if result.get('success'):
@@ -525,6 +1003,9 @@ class DocumentGenerator:
             tmp.write(full_markdown)
             tmp_path = tmp.name
 
+        # 디버깅: 마크다운 파일 경로 출력
+        print(f"📝 임시 마크다운 파일: {tmp_path}")
+
         try:
             # Pandoc으로 변환
             output_file = Path(output_path)
@@ -540,8 +1021,9 @@ class DocumentGenerator:
             print(f"📄 Word 문서 생성 완료 (Pandoc): {output_file}")
 
         finally:
-            # 임시 파일 삭제
-            Path(tmp_path).unlink(missing_ok=True)
+            # 임시 파일 삭제 (디버깅 시 주석 처리)
+            # Path(tmp_path).unlink(missing_ok=True)
+            pass
 
     def _generate_word_basic(self, report_data: Dict[str, Any], output_path: str):
         """기본 방식으로 Word 생성 (python-docx)"""
@@ -557,6 +1039,17 @@ class DocumentGenerator:
             heading = doc.add_heading(title, level=1)
             heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
             self.first_heading_added = True
+
+            # 작성자 및 작성일자 추가
+            author = report_data.get('author', 'Unknown')
+            created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
+
+            info_para = doc.add_paragraph()
+            info_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            info_run = info_para.add_run(f"작성자: {author}  |  작성일: {created_date}")
+            info_run.font.size = Pt(11)
+            info_run.font.color.rgb = RGBColor(100, 100, 100)
+
             doc.add_paragraph()  # 제목 뒤 간격
 
         # 결과

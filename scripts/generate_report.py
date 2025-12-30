@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import argparse
+import getpass
 from datetime import datetime
 
 from report_generator.report_generator import ReportGenerator
@@ -97,6 +98,13 @@ def main():
         help="JSON만 생성하고 문서는 생성하지 않음"
     )
 
+    parser.add_argument(
+        "--author",
+        type=str,
+        default=None,
+        help="보고서 작성자 (미지정 시 시스템 사용자명 사용)"
+    )
+
     args = parser.parse_args()
 
     # 날짜 필터 파싱
@@ -125,6 +133,12 @@ def main():
 
     # 보고서 생성
     report_data = generator.generate_report(args.questions, date_filter)
+
+    # 작성자 및 작성일자 정보 추가
+    author = args.author if args.author else getpass.getuser()
+    report_data["author"] = author
+    report_data["created_date"] = datetime.now().strftime("%Y-%m-%d")
+    report_data["created_datetime"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 출력 경로를 data/reports 디렉토리로 설정
     reports_dir = Path(__file__).parent.parent / 'data' / 'reports'

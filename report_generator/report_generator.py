@@ -283,6 +283,7 @@ class ReportGenerator:
 
         report_data = {
             "report_type": self.report_type,
+            "title": "주간 보고서" if self.report_type == "weekly" else "최종 보고서",
             "generated_at": datetime.now().isoformat(),
             "retriever": self.retriever_config,
             "llm": self.llm_config,
@@ -310,6 +311,7 @@ class ReportGenerator:
 
 def main():
     import argparse
+    import getpass
 
     parser = argparse.ArgumentParser(description="통합 보고서 생성기")
     parser.add_argument("--report-type", type=str, choices=['weekly', 'executive'], required=True,
@@ -320,6 +322,7 @@ def main():
     parser.add_argument("--start-date", type=str, help="시작 날짜 (YYYY-MM-DD)")
     parser.add_argument("--end-date", type=str, help="종료 날짜 (YYYY-MM-DD)")
     parser.add_argument("--output", type=str, default=None, help="출력 파일 경로")
+    parser.add_argument("--author", type=str, default=None, help="보고서 작성자 (미지정 시 시스템 사용자명 사용)")
 
     args = parser.parse_args()
 
@@ -340,8 +343,16 @@ def main():
         # 설정 파일의 기본 질문 사용
         questions = generator.default_questions
 
+    # 작성자 정보 설정
+    author = args.author if args.author else getpass.getuser()
+
     # 보고서 생성
     report_data = generator.generate_report(questions, date_filter)
+
+    # 작성자 및 작성일자 정보 추가
+    report_data["author"] = author
+    report_data["created_date"] = datetime.now().strftime("%Y-%m-%d")
+    report_data["created_datetime"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # JSON 저장
     if args.output:
