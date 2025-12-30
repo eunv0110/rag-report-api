@@ -16,12 +16,13 @@
 """
 
 import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import argparse
 import getpass
+from pathlib import Path
 from datetime import datetime
+
+# 프로젝트 루트를 sys.path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from report_generator.report_generator import ReportGenerator
 from report_generator.document_generator import DocumentGenerator

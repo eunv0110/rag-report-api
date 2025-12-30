@@ -7,18 +7,27 @@
 """
 
 import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from dotenv import load_dotenv
-load_dotenv()
-
 import os
 import json
 import yaml
+import time
+import gc
+import re
+import argparse
+import getpass
+import traceback
+from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+
+from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
+
+# 프로젝트 루트를 sys.path에 추가
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# 환경 변수 로드
+load_dotenv()
 
 from config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT
 from utils.langfuse_utils import get_langfuse_client
@@ -69,7 +78,6 @@ class ReportGenerator:
 
     def _extract_title_from_answer(self, answer: str) -> str:
         """답변에서 제목 추출 ([TITLE]...[/TITLE] 태그 사용)"""
-        import re
         match = re.search(r'\[TITLE\](.*?)\[/TITLE\]', answer, re.DOTALL)
         if match:
             return match.group(1).strip()
@@ -77,14 +85,10 @@ class ReportGenerator:
 
     def _remove_title_tag_from_answer(self, answer: str) -> str:
         """답변에서 제목 태그 제거"""
-        import re
         return re.sub(r'\[TITLE\].*?\[/TITLE\]\s*', '', answer, flags=re.DOTALL).strip()
 
     def retrieve_documents(self, question: str, date_filter: Optional[tuple] = None) -> List[Any]:
         """문서 검색 - 설정에 따라 RRF Ensemble 또는 RRF MultiQuery 사용"""
-        import time
-        import gc
-
         # Qdrant 락 파일 정리
         if os.path.exists(self.qdrant_lock):
             try:
@@ -290,7 +294,6 @@ class ReportGenerator:
 
             except Exception as e:
                 print(f"❌ 오류 발생: {e}\n")
-                import traceback
                 traceback.print_exc()
 
                 results.append({
@@ -332,9 +335,7 @@ class ReportGenerator:
 
 
 def main():
-    import argparse
-    import getpass
-
+    """CLI 진입점"""
     parser = argparse.ArgumentParser(description="통합 보고서 생성기")
     parser.add_argument("--report-type", type=str, choices=['weekly', 'executive'], required=True,
                        help="보고서 타입 (weekly 또는 executive)")

@@ -6,7 +6,9 @@
 """
 
 import sys
+import argparse
 from pathlib import Path
+from datetime import datetime
 
 # 프로젝트 루트를 sys.path에 추가 (직접 실행 시)
 if __name__ == "__main__":
@@ -17,6 +19,8 @@ try:
     from .report_generator import ReportGenerator
 except ImportError:
     from report_generator.report_generator import ReportGenerator
+
+from utils.date_utils import parse_date_range
 
 
 class ExecutiveReportGenerator(ReportGenerator):
@@ -40,11 +44,7 @@ class ExecutiveReportGenerator(ReportGenerator):
 
 
 def main():
-    """CLI 진입점 - 통합 ReportGenerator의 main() 호출"""
-    import argparse
-    from datetime import datetime
-    from utils.date_utils import parse_date_range
-
+    """CLI 진입점"""
     parser = argparse.ArgumentParser(description="최종 보고서 생성기 (OpenAI + DeepSeek-V3.1)")
     parser.add_argument("--questions", type=str, nargs='+', help="질문 리스트")
     parser.add_argument("--date-range", type=str, help="날짜 범위 (예: '이번 주', '12월 2주차')")

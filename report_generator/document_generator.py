@@ -4,17 +4,24 @@
 JSON 보고서 데이터를 Word/PDF 문서로 변환
 """
 
+import os
+import re
+import json
+import argparse
+import tempfile
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
-import re
-import tempfile
-import os
+
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement
 from docx.oxml.ns import qn
+from docx.table import Table
+
+
 def _check_pandoc_available():
     """Pandoc 사용 가능 여부 확인"""
     try:
@@ -861,9 +868,6 @@ class DocumentGenerator:
         Args:
             doc: Word 문서 객체
         """
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.shared import Pt, RGBColor
-
         # [REPORT_HEADER] 블록 찾기 (Pandoc이 한 줄로 합칠 수 있음)
         header_para = None
         header_data = {}
@@ -875,7 +879,6 @@ class DocumentGenerator:
             if '[REPORT_HEADER]' in text and '[/REPORT_HEADER]' in text:
                 header_para = para
                 # 정규식으로 추출
-                import re
                 title_match = re.search(r'TITLE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+AUTHOR:|$)', text)
                 author_match = re.search(r'AUTHOR:([^\s]+(?:\s+[^\s]+)*?)(?:\s+DATE:|$)', text)
                 date_match = re.search(r'DATE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+(?:DATEFILTER:|\[/REPORT_HEADER\])|$)', text)
@@ -968,8 +971,6 @@ class DocumentGenerator:
         Args:
             doc: Word 문서 객체
         """
-        from docx.shared import Pt, Inches
-
         adjusted_count = 0
         for para in doc.paragraphs:
             # 리스트 스타일인지 확인 (다양한 스타일 이름 대응)
@@ -1011,8 +1012,6 @@ class DocumentGenerator:
             doc: Word 문서 객체
             markdown_tables: 마크다운 표 리스트 (순서대로)
         """
-        from docx.table import Table
-
         # Placeholder를 찾아서 교체 정보 수집
         placeholders_to_replace = []
 
@@ -1105,8 +1104,6 @@ class DocumentGenerator:
 
     def _replace_tables_in_word(self, doc: Document, markdown_tables: List[str]):
         """Word 문서의 테이블을 python-docx로 재생성한 테이블로 교체"""
-        from docx.oxml import OxmlElement
-
         # 텍스트로 렌더링된 테이블 행들을 찾아서 삭제하고 그 자리에 실제 테이블 삽입
         paragraphs_to_remove = []
         table_insert_positions = []
@@ -1170,7 +1167,6 @@ class DocumentGenerator:
             parent = p_element.getparent()
 
             # 새 테이블 생성 (단락 앞에 삽입)
-            from docx.table import Table
             tbl = doc.add_table(rows=num_rows, cols=num_cols)._element
 
             # 단락 바로 앞에 테이블 삽입
@@ -1397,8 +1393,6 @@ class DocumentGenerator:
 
         try:
             # Word를 PDF로 변환 (LibreOffice 사용)
-            import subprocess
-
             output_file = Path(output_path)
             output_dir = output_file.parent
 
@@ -1435,10 +1429,7 @@ class DocumentGenerator:
 
 
 def main():
-    """테스트용 메인 함수"""
-    import json
-    import argparse
-
+    """CLI 진입점"""
     parser = argparse.ArgumentParser(description="보고서 문서 생성기")
     parser.add_argument("--json", type=str, required=True, help="입력 JSON 파일")
     parser.add_argument("--output", type=str, required=True, help="출력 파일 (.docx 또는 .pdf)")
