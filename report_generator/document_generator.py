@@ -15,11 +15,16 @@ from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.shared import OxmlElement
 from docx.oxml.ns import qn
-try:
-    import pypandoc
-    PANDOC_AVAILABLE = True
-except ImportError:
-    PANDOC_AVAILABLE = False
+def _check_pandoc_available():
+    """Pandoc 사용 가능 여부 확인"""
+    try:
+        import pypandoc
+        return True
+    except ImportError:
+        return False
+    except Exception as e:
+        print(f"⚠️ pypandoc import 오류: {e}")
+        return False
 
 
 class DocumentGenerator:
@@ -446,12 +451,19 @@ class DocumentGenerator:
             output_path: 출력 파일 경로
         """
         # Pandoc 사용 가능 여부 확인
-        if PANDOC_AVAILABLE:
+        pandoc_available = _check_pandoc_available()
+        print(f"🔍 PANDOC_AVAILABLE: {pandoc_available}")
+        if pandoc_available:
+            print("🔧 Pandoc 하이브리드 방식 시도 중...")
             try:
                 self._generate_word_with_pandoc_and_tables(report_data, output_path)
                 return
             except Exception as e:
+                import traceback
                 print(f"⚠️ Pandoc 변환 실패, 기본 방식으로 전환: {e}")
+                print(f"상세 오류:\n{traceback.format_exc()}")
+        else:
+            print("⚠️ pypandoc을 사용할 수 없습니다.")
 
         # 기본 방식 (python-docx)
         print("🔧 python-docx 방식으로 Word 생성 (테이블 지원)")
@@ -642,21 +654,19 @@ class DocumentGenerator:
             stripped = line.lstrip()
             indent = len(line) - len(stripped)
 
-            # 리스트 항목인지 확인
-            is_list_item = stripped.startswith(('-', '*', '+')) or (stripped and len(stripped) > 0 and stripped[0].isdigit() and '.' in stripped[:4])
+            # 리스트 항목인지 확인 (- * + 또는 숫자.)
+            is_list_item = bool(re.match(r'^[-*+]\s', stripped) or re.match(r'^\d+\.\s', stripped))
 
-            # 들여쓰기가 있는 모든 항목 정규화 (리스트 항목이거나, 들여쓰기가 있는 경우)
             if is_list_item and indent > 0:
-                # 2칸 단위를 4칸 단위로 변환
-                # 2칸 -> 4칸, 4칸 -> 4칸, 6칸 -> 8칸, 8칸 -> 8칸
-                level = (indent + 1) // 2  # 2칸당 1레벨
+                # 모든 들여쓰기를 4칸 단위로 정규화
+                # 1-4칸 -> 4칸 (레벨 1)
+                # 5-8칸 -> 8칸 (레벨 2)
+                # 9-12칸 -> 12칸 (레벨 3)
+                level = (indent - 1) // 4 + 1
                 normalized_indent = level * 4
                 result_lines.append(' ' * normalized_indent + stripped)
-            elif is_list_item:
-                # 들여쓰기 없는 리스트 항목은 그대로
-                result_lines.append(line)
             else:
-                # 리스트가 아닌 일반 텍스트는 그대로
+                # 들여쓰기 없는 리스트 항목이거나 일반 텍스트는 그대로
                 result_lines.append(line)
 
         return '\n'.join(result_lines)
@@ -667,6 +677,7 @@ class DocumentGenerator:
         표는 python-docx로 직접 생성하고, 나머지는 pandoc으로 변환
         표는 원래 마크다운에 있던 위치에 정확히 배치
         """
+        import pypandoc
         print("🔧 하이브리드 방식: 표는 python-docx, 나머지는 Pandoc")
 
         # 결과 수집 및 표 추출
@@ -1203,6 +1214,7 @@ class DocumentGenerator:
 
     def _generate_word_with_pandoc(self, report_data: Dict[str, Any], output_path: str):
         """Pandoc을 사용한 Word 생성 (마크다운 완벽 지원)"""
+        import pypandoc
         # 결과 수집
         results = report_data.get('results', [])
         markdown_content = []

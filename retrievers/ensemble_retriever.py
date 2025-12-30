@@ -16,7 +16,9 @@ def get_ensemble_retriever(
     k: int = 5,
     bm25_weight: float = 0.5,
     dense_weight: float = 0.5,
-    date_filter: tuple = None
+    date_filter: tuple = None,
+    use_mmr: bool = True,
+    lambda_mult: float = 0.5
 ) -> BaseRetriever:
     """
     Ensemble Retriever 생성 (BM25 + Dense with RRF)
@@ -29,13 +31,20 @@ def get_ensemble_retriever(
         bm25_weight: BM25 결과의 가중치 (0.0 ~ 1.0)
         dense_weight: Dense 결과의 가중치 (0.0 ~ 1.0)
         date_filter: (start_date, end_date) 튜플 (ISO 형식)
+        use_mmr: Dense Retriever에서 MMR 사용 여부 (기본값 True)
+        lambda_mult: MMR lambda 파라미터 (0~1, 기본값 0.5)
 
     Returns:
         EnsembleRetriever 인스턴스
     """
     # 각 retriever 생성 (더 많은 후보를 가져와서 RRF로 재순위화)
     bm25_retriever = get_bm25_retriever(k=k * 2, date_filter=date_filter)
-    dense_retriever = get_dense_retriever(k=k * 2, date_filter=date_filter)
+    dense_retriever = get_dense_retriever(
+        k=k * 2,
+        date_filter=date_filter,
+        use_mmr=use_mmr,
+        lambda_mult=lambda_mult
+    )
 
     # EnsembleRetriever로 결합 (c 파라미터는 RRF의 랭크 상수)
     ensemble_retriever = EnsembleRetriever(

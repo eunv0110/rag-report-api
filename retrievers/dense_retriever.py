@@ -58,7 +58,9 @@ def get_langchain_embeddings(embedder):
 def get_dense_retriever(
     k: int = 5,
     use_singleton: bool = True,
-    date_filter: tuple = None
+    date_filter: tuple = None,
+    use_mmr: bool = True,
+    lambda_mult: float = 0.5
 ) -> BaseRetriever:
     """
     Dense Retriever 생성 (Qdrant 벡터 검색)
@@ -67,6 +69,8 @@ def get_dense_retriever(
         k: 반환할 문서 수
         use_singleton: True면 기존 client를 재사용 (Qdrant lock 방지) - 기본값 True
         date_filter: (start_date, end_date) 튜플 (ISO 형식)
+        use_mmr: MMR(Maximal Marginal Relevance) 사용 여부 (기본값 True)
+        lambda_mult: MMR lambda 파라미터 (0~1). 1에 가까울수록 관련성 우선, 0에 가까울수록 다양성 우선 (기본값 0.5)
 
     Returns:
         Qdrant VectorStore Retriever 인스턴스
@@ -142,21 +146,43 @@ def get_dense_retriever(
                 return self._get_relevant_documents(query, **kwargs)
 
         # 필터링 후에도 k개를 확보하기 위해 더 많이 검색
-        search_kwargs = {"k": k * 3}
-        base_retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs=search_kwargs
-        )
+        if use_mmr:
+            search_kwargs = {
+                "k": k * 3,
+                "fetch_k": k * 6,  # MMR 후보 문서 수
+                "lambda_mult": lambda_mult
+            }
+            base_retriever = vectorstore.as_retriever(
+                search_type="mmr",
+                search_kwargs=search_kwargs
+            )
+        else:
+            search_kwargs = {"k": k * 3}
+            base_retriever = vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs=search_kwargs
+            )
 
         return DateFilteredRetriever(base_retriever, start_date, end_date, k)
 
     else:
         # 날짜 필터 없으면 일반 retriever
-        search_kwargs = {"k": k}
-        retriever = vectorstore.as_retriever(
-            search_type="similarity",
-            search_kwargs=search_kwargs
-        )
+        if use_mmr:
+            search_kwargs = {
+                "k": k,
+                "fetch_k": k * 2,  # MMR 후보 문서 수
+                "lambda_mult": lambda_mult
+            }
+            retriever = vectorstore.as_retriever(
+                search_type="mmr",
+                search_kwargs=search_kwargs
+            )
+        else:
+            search_kwargs = {"k": k}
+            retriever = vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs=search_kwargs
+            )
         return retriever
 
 

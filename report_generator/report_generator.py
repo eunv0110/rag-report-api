@@ -106,7 +106,9 @@ class ReportGenerator:
             k=self.retriever_config['top_k'],
             bm25_weight=rrf_config.get('bm25_weight', 0.5),
             dense_weight=rrf_config.get('dense_weight', 0.5),
-            date_filter=date_filter
+            date_filter=date_filter,
+            use_mmr=rrf_config.get('use_mmr', True),
+            lambda_mult=rrf_config.get('lambda_mult', 0.5)
         )
 
         # MultiQuery 타입이면 래핑
