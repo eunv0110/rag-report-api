@@ -33,6 +33,10 @@ class DocumentGenerator:
     def _generate_report_title(self, question: str) -> str:
         """질문 기반으로 보고서 제목 생성
 
+        Note:
+            LLM이 제목을 생성하지 못했을 때를 대비한 백업(fallback) 메서드
+            실제로는 LLM이 생성한 제목을 우선 사용하고, 없을 경우에만 호출됨
+
         Args:
             question: 사용자 질문
 
@@ -620,6 +624,43 @@ class DocumentGenerator:
         for row in table_buffer[data_start_idx:]:
             output_lines.append(row)
 
+    def _normalize_list_indentation(self, text: str) -> str:
+        """마크다운 리스트 들여쓰기를 pandoc이 인식할 수 있도록 정규화
+
+        2칸 들여쓰기를 4칸으로 변환
+        """
+        lines = text.split('\n')
+        result_lines = []
+
+        for line in lines:
+            # 빈 줄은 그대로
+            if not line.strip():
+                result_lines.append(line)
+                continue
+
+            # 들여쓰기 감지
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+
+            # 리스트 항목인지 확인
+            is_list_item = stripped.startswith(('-', '*', '+')) or (stripped and len(stripped) > 0 and stripped[0].isdigit() and '.' in stripped[:4])
+
+            # 들여쓰기가 있는 모든 항목 정규화 (리스트 항목이거나, 들여쓰기가 있는 경우)
+            if is_list_item and indent > 0:
+                # 2칸 단위를 4칸 단위로 변환
+                # 2칸 -> 4칸, 4칸 -> 4칸, 6칸 -> 8칸, 8칸 -> 8칸
+                level = (indent + 1) // 2  # 2칸당 1레벨
+                normalized_indent = level * 4
+                result_lines.append(' ' * normalized_indent + stripped)
+            elif is_list_item:
+                # 들여쓰기 없는 리스트 항목은 그대로
+                result_lines.append(line)
+            else:
+                # 리스트가 아닌 일반 텍스트는 그대로
+                result_lines.append(line)
+
+        return '\n'.join(result_lines)
+
     def _generate_word_with_pandoc_and_tables(self, report_data: Dict[str, Any], output_path: str):
         """Pandoc + python-docx 하이브리드 방식으로 Word 생성
 
@@ -633,18 +674,28 @@ class DocumentGenerator:
         markdown_content = []
         all_tables = []  # 모든 표를 순서대로 저장
 
-        # 보고서 제목 추가 (질문 기반)
-        if results and results[0].get('question'):
-            title = self._generate_report_title(results[0]['question'])
+        # 보고서 제목 추가 (LLM이 생성한 제목 사용, 없으면 기본 제목)
+        if results and results[0].get('success'):
+            # LLM이 생성한 제목 우선 사용
+            title = results[0].get('title')
+            if not title:
+                # 제목이 없으면 질문 기반 생성
+                title = self._generate_report_title(results[0]['question'])
+
             author = report_data.get('author', 'Unknown')
             created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
 
-            # 제목, 작성자, 작성일을 포함한 헤더를 placeholder로 추가
+            # 날짜 필터 정보 추출
+            date_filter = results[0].get('date_filter', None)
+
+            # 제목, 작성자, 작성일, 날짜 필터를 포함한 헤더를 placeholder로 추가
             # (Pandoc 변환 후 python-docx로 직접 스타일 적용)
             markdown_content.append('[REPORT_HEADER]')
             markdown_content.append(f'TITLE:{title}')
             markdown_content.append(f'AUTHOR:{author}')
             markdown_content.append(f'DATE:{created_date}')
+            if date_filter:
+                markdown_content.append(f'DATEFILTER:{date_filter}')
             markdown_content.append('[/REPORT_HEADER]')
             markdown_content.append('\n')
 
@@ -656,6 +707,8 @@ class DocumentGenerator:
                 answer = self._fix_table_format(answer)
                 # "임원보고서" 헤딩 제거
                 answer = self._remove_first_heading(answer)
+                # 리스트 들여쓰기 정규화 (2칸 -> 4칸)
+                answer = self._normalize_list_indentation(answer)
 
                 # 표를 placeholder로 치환
                 answer_with_placeholders, tables = self._replace_tables_with_placeholders(answer, len(all_tables))
@@ -805,7 +858,8 @@ class DocumentGenerator:
                 import re
                 title_match = re.search(r'TITLE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+AUTHOR:|$)', text)
                 author_match = re.search(r'AUTHOR:([^\s]+(?:\s+[^\s]+)*?)(?:\s+DATE:|$)', text)
-                date_match = re.search(r'DATE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+\[/REPORT_HEADER\]|$)', text)
+                date_match = re.search(r'DATE:([^\s]+(?:\s+[^\s]+)*?)(?:\s+(?:DATEFILTER:|\[/REPORT_HEADER\])|$)', text)
+                datefilter_match = re.search(r'DATEFILTER:([^\s]+(?:\s+[^\s]+)*?)(?:\s+\[/REPORT_HEADER\]|$)', text)
 
                 if title_match:
                     header_data['title'] = title_match.group(1).strip()
@@ -813,6 +867,8 @@ class DocumentGenerator:
                     header_data['author'] = author_match.group(1).strip()
                 if date_match:
                     header_data['date'] = date_match.group(1).strip()
+                if datefilter_match:
+                    header_data['datefilter'] = datefilter_match.group(1).strip()
 
                 break
 
@@ -832,37 +888,57 @@ class DocumentGenerator:
             title_run.font.name = 'Malgun Gothic'
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-            # 작성자 및 작성일 단락 생성 (우측 정렬, 같은 줄)
-            info_para = doc.add_paragraph()
+            # 작성자 단락 생성 (우측 정렬)
+            author_para = doc.add_paragraph()
             author_text = f"작성자: {header_data.get('author', 'Unknown')}"
+            author_run = author_para.add_run(author_text)
+            author_run.font.size = Pt(10)
+            author_run.font.name = 'Malgun Gothic'
+            author_run.font.color.rgb = RGBColor(100, 100, 100)
+            author_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+            # 작성일 단락 생성 (우측 정렬)
+            date_para = doc.add_paragraph()
             date_text = f"작성일: {header_data.get('date', '')}"
-            info_run = info_para.add_run(f"{author_text}  |  {date_text}")
-            info_run.font.size = Pt(10)
-            info_run.font.name = 'Malgun Gothic'
-            info_run.font.color.rgb = RGBColor(100, 100, 100)
-            info_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            date_run = date_para.add_run(date_text)
+            date_run.font.size = Pt(10)
+            date_run.font.name = 'Malgun Gothic'
+            date_run.font.color.rgb = RGBColor(100, 100, 100)
+            date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-            # info_para를 title_para 바로 다음으로 이동
-            info_element = info_para._element
-            info_element.getparent().remove(info_element)
-            parent.insert(insert_index + 1, info_element)
+            # author_para를 title_para 바로 다음으로 이동
+            author_element = author_para._element
+            author_element.getparent().remove(author_element)
+            parent.insert(insert_index + 1, author_element)
 
-            # 구분선 추가
-            separator_para = doc.add_paragraph()
-            separator_run = separator_para.add_run('─' * 50)
-            separator_run.font.color.rgb = RGBColor(200, 200, 200)
-            separator_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            # date_para를 author_para 바로 다음으로 이동
+            date_element = date_para._element
+            date_element.getparent().remove(date_element)
+            parent.insert(insert_index + 2, date_element)
 
-            # separator_para를 info_para 바로 다음으로 이동
-            sep_element = separator_para._element
-            sep_element.getparent().remove(sep_element)
-            parent.insert(insert_index + 2, sep_element)
+            next_insert_index = insert_index + 3
+
+            # 날짜 필터가 있으면 추가 (우측 정렬)
+            if header_data.get('datefilter'):
+                datefilter_para = doc.add_paragraph()
+                datefilter_text = f"수행 기간: {header_data.get('datefilter')}"
+                datefilter_run = datefilter_para.add_run(datefilter_text)
+                datefilter_run.font.size = Pt(10)
+                datefilter_run.font.name = 'Malgun Gothic'
+                datefilter_run.font.color.rgb = RGBColor(100, 100, 100)
+                datefilter_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+                # datefilter_para를 date_para 바로 다음으로 이동
+                datefilter_element = datefilter_para._element
+                datefilter_element.getparent().remove(datefilter_element)
+                parent.insert(next_insert_index, datefilter_element)
+                next_insert_index += 1
 
             # 빈 줄 추가
             blank_para = doc.add_paragraph()
             blank_element = blank_para._element
             blank_element.getparent().remove(blank_element)
-            parent.insert(insert_index + 3, blank_element)
+            parent.insert(next_insert_index, blank_element)
 
             print(f"📋 보고서 헤더 포맷 적용 완료")
 
@@ -1173,25 +1249,51 @@ class DocumentGenerator:
         # 첫 번째 헤딩 플래그 초기화
         self.first_heading_added = False
 
-        # 보고서 제목 추가 (질문 기반)
+        # 보고서 제목 추가 (LLM이 생성한 제목 우선 사용, 없으면 질문 기반)
         results = report_data.get('results', [])
-        if results and results[0].get('question'):
-            title = self._generate_report_title(results[0]['question'])
+        if results and results[0].get('success'):
+            # LLM이 생성한 제목 우선 사용
+            title = results[0].get('title')
+            if not title:
+                # 제목이 없으면 질문 기반 생성
+                title = self._generate_report_title(results[0]['question'])
+
             heading = doc.add_heading(title, level=1)
             heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
             self.first_heading_added = True
 
-            # 작성자 및 작성일자 추가
+            # 작성자 및 작성일자 추가 (우측 정렬, 별도 줄)
             author = report_data.get('author', 'Unknown')
             created_date = report_data.get('created_date', datetime.now().strftime("%Y-%m-%d"))
 
-            info_para = doc.add_paragraph()
-            info_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            info_run = info_para.add_run(f"작성자: {author}  |  작성일: {created_date}")
-            info_run.font.size = Pt(11)
-            info_run.font.color.rgb = RGBColor(100, 100, 100)
+            # 작성자 단락 (우측 정렬)
+            author_para = doc.add_paragraph()
+            author_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            author_run = author_para.add_run(f"작성자: {author}")
+            author_run.font.size = Pt(10)
+            author_run.font.name = 'Malgun Gothic'
+            author_run.font.color.rgb = RGBColor(100, 100, 100)
 
-            doc.add_paragraph()  # 제목 뒤 간격
+            # 작성일 단락 (우측 정렬)
+            date_para = doc.add_paragraph()
+            date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            date_run = date_para.add_run(f"작성일: {created_date}")
+            date_run.font.size = Pt(10)
+            date_run.font.name = 'Malgun Gothic'
+            date_run.font.color.rgb = RGBColor(100, 100, 100)
+
+            # 날짜 필터 정보 추가 (수행날짜)
+            date_filter = results[0].get('date_filter', None)
+            if date_filter:
+                datefilter_para = doc.add_paragraph()
+                datefilter_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                datefilter_run = datefilter_para.add_run(f"보고 기간: {date_filter}")
+                datefilter_run.font.size = Pt(10)
+                datefilter_run.font.name = 'Malgun Gothic'
+                datefilter_run.font.color.rgb = RGBColor(100, 100, 100)
+
+            # 제목 뒤 간격
+            doc.add_paragraph()
 
         # 결과
 

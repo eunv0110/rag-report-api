@@ -67,6 +67,19 @@ class ReportGenerator:
         with open(prompt_path, 'r', encoding='utf-8') as f:
             return f.read()
 
+    def _extract_title_from_answer(self, answer: str) -> str:
+        """답변에서 제목 추출 ([TITLE]...[/TITLE] 태그 사용)"""
+        import re
+        match = re.search(r'\[TITLE\](.*?)\[/TITLE\]', answer, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def _remove_title_tag_from_answer(self, answer: str) -> str:
+        """답변에서 제목 태그 제거"""
+        import re
+        return re.sub(r'\[TITLE\].*?\[/TITLE\]\s*', '', answer, flags=re.DOTALL).strip()
+
     def retrieve_documents(self, question: str, date_filter: Optional[tuple] = None) -> List[Any]:
         """문서 검색 - 설정에 따라 RRF Ensemble 또는 RRF MultiQuery 사용"""
         import time
@@ -234,6 +247,12 @@ class ReportGenerator:
                 # 답변 생성 (Langfuse 자동 추적)
                 answer = self.generate_answer(question, docs)
 
+                # 제목 추출
+                title = self._extract_title_from_answer(answer)
+                answer = self._remove_title_tag_from_answer(answer)
+
+                if title:
+                    print(f"📋 제목: {title}")
                 print(f"📝 답변:\n{answer}\n")
 
                 # 이미지 메타데이터 추출
@@ -258,6 +277,7 @@ class ReportGenerator:
                 results.append({
                     "question_id": i,
                     "question": question,
+                    "title": title,  # LLM이 생성한 제목 추가
                     "date_filter": f"{date_filter[0][:10]} ~ {date_filter[1][:10]}" if date_filter else None,
                     "num_docs": len(docs),
                     "doc_titles": [doc.metadata.get('page_title', 'Unknown') for doc in docs],
