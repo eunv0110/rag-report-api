@@ -288,42 +288,42 @@ llm:
 
 # 테스트용 LLM 목록 (test_executive_simple.py, test_weekly_simple.py에서 사용)
 test_llms:
-  - name: "phi4"
-    display_name: "Phi-4"
-    model_id: "azure_ai:Phi-4"
-    description: "Microsoft의 경량 모델"
-    context_limit: 16384
-    max_docs: 8  # Phi-4는 컨텍스트 제한으로 문서 수 제한
+  # - name: "phi4"
+  #   display_name: "Phi-4"
+  #   model_id: "azure_ai:Phi-4"
+  #   description: "Microsoft의 경량 모델"
+  #   context_limit: 16384
+  #   max_docs: 8  # Phi-4는 컨텍스트 제한으로 문서 수 제한
 
-  - name: "deepseek_v31"
-    display_name: "DeepSeek-V3.1"
-    model_id: "azure_ai:DeepSeek-V3.1"
-    description: "DeepSeek 최신 버전"
+  # - name: "deepseek_v31"
+  #   display_name: "DeepSeek-V3.1"
+  #   model_id: "azure_ai:DeepSeek-V3.1"
+  #   description: "DeepSeek 최신 버전"
 
   - name: "gpt41"
     display_name: "OpenAI GPT-4.1"
     model_id: "azure_ai:gpt-4.1"
     description: "OpenAI GPT-4.1"
 
-  - name: "gpt51"
-    display_name: "OpenAI GPT-5.1"
-    model_id: "azure_ai:gpt-5.1"
-    description: "OpenAI GPT-5.1 최신 모델"
+  # - name: "gpt51"
+  #   display_name: "OpenAI GPT-5.1"
+  #   model_id: "azure_ai:gpt-5.1"
+  #   description: "OpenAI GPT-5.1 최신 모델"
 
-  - name: "llama33_70b"
-    display_name: "Llama-3.3-70B-Instruct"
-    model_id: "azure_ai:Llama-3.3-70B-Instruct"
-    description: "Meta Llama 3.3 70B"
+  # - name: "llama33_70b"
+  #   display_name: "Llama-3.3-70B-Instruct"
+  #   model_id: "azure_ai:Llama-3.3-70B-Instruct"
+  #   description: "Meta Llama 3.3 70B"
 
-  - name: "claude_opus_45"
-    display_name: "Claude 4.5 Opus"
-    model_id: "anthropic:claude-opus-4.5"
-    description: "Anthropic Claude Opus 4.5"
+  # - name: "claude_opus_45"
+  #   display_name: "Claude 4.5 Opus"
+  #   model_id: "anthropic:claude-opus-4.5"
+  #   description: "Anthropic Claude Opus 4.5"
 
-  - name: "claude_sonnet_45"
-    display_name: "Claude 4.5 Sonnet"
-    model_id: "anthropic:claude-sonnet-4.5"
-    description: "Anthropic Claude Sonnet 4.5"
+  # - name: "claude_sonnet_45"
+  #   display_name: "Claude 4.5 Sonnet"
+  #   model_id: "anthropic:claude-sonnet-4.5"
+  #   description: "Anthropic Claude Sonnet 4.5"
 
 # 테스트 질문 (interactive 모드 기본값)
 test_questions:
