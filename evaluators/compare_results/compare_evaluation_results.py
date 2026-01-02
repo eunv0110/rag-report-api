@@ -21,16 +21,7 @@ import json
 # ====================================================================
 # 처리할 폴더 리스트
 FOLDER_PATHS = [
-    "/home/work/rag/Project/rag-report-generator/data/final/bge_m3_rrf_ensemble",
-    "/home/work/rag/Project/rag-report-generator/data/final/bge_m3_rrf_multiquery_lc",
-    "/home/work/rag/Project/rag-report-generator/data/final/gemini_rrf_multiquery",
-    "/home/work/rag/Project/rag-report-generator/data/final/openai_rrf_lc_time",
-    "/home/work/rag/Project/rag-report-generator/data/final/openai_rrf_multiquery",
-    "/home/work/rag/Project/rag-report-generator/data/final/openai_rrf_multiquery_lc",
-    "/home/work/rag/Project/rag-report-generator/data/final/qwen_rrf_ensemble",
-    "/home/work/rag/Project/rag-report-generator/data/final/qwen_rrf_multiquery_lc",
-    "/home/work/rag/Project/rag-report-generator/data/final/upstage_rrf_ensemble",
-    "/home/work/rag/Project/rag-report-generator/data/final/upstage_rrf_multiquery_lc",
+"/home/work/rag/Project/rag-report-generator/data/langfuse/reranker"
 ]
 
 OUTPUT_PATH = "/home/work/rag/Project/rag-report-generator/data/final/comparison_results/comparison.json"  # 결과를 JSON으로 저장

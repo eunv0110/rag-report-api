@@ -24,10 +24,10 @@ retriever:
 
 # LLM 설정
 llm:
-  name: "deepseek_v31"
-  display_name: "DeepSeek-V3.1"
-  model_id: "azure_ai:DeepSeek-V3.1"
-  description: "DeepSeek 최신 버전"
+  name: "gpt41"
+  display_name: "GPT-4.1"
+  model_id: "azure_ai:gpt-4.1"
+  description: "OpenAI GPT-4.1"
 
   # Generation 파라미터
   generation:

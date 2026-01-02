@@ -10,7 +10,13 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_core.retrievers import BaseRetriever
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, Range, MatchValue
-from config.settings import QDRANT_COLLECTION, get_qdrant_path
+from config.settings import (
+    QDRANT_COLLECTION,
+    QDRANT_URL,
+    QDRANT_USE_SERVER,
+    get_qdrant_path,
+    get_collection_name
+)
 from models.embeddings.factory import get_embedder
 from langchain_core.documents import Document
 from typing import List
@@ -60,7 +66,8 @@ def get_dense_retriever(
     use_singleton: bool = True,
     date_filter: tuple = None,
     use_mmr: bool = True,
-    lambda_mult: float = 0.5
+    lambda_mult: float = 0.5,
+    preset: str = None
 ) -> BaseRetriever:
     """
     Dense Retriever 생성 (Qdrant 벡터 검색)
@@ -71,6 +78,7 @@ def get_dense_retriever(
         date_filter: (start_date, end_date) 튜플 (ISO 형식)
         use_mmr: MMR(Maximal Marginal Relevance) 사용 여부 (기본값 True)
         lambda_mult: MMR lambda 파라미터 (0~1). 1에 가까울수록 관련성 우선, 0에 가까울수록 다양성 우선 (기본값 0.5)
+        preset: 임베딩 프리셋 (None이면 환경변수 사용)
 
     Returns:
         Qdrant VectorStore Retriever 인스턴스
@@ -79,25 +87,38 @@ def get_dense_retriever(
     base_embedder = get_embedder()
     langchain_embeddings = get_langchain_embeddings(base_embedder)
 
-    # Qdrant 경로 동적 계산 (현재 MODEL_PRESET 기반)
-    qdrant_path = get_qdrant_path()
-    model_preset = os.getenv("MODEL_PRESET", "default")
+    # 컬렉션 이름 결정
+    collection_name = get_collection_name(preset)
+    model_preset = preset or os.getenv("MODEL_PRESET", "default")
 
-    # Qdrant client 생성 (싱글톤 사용 시 캐시에서 재사용)
-    # 캐시 키에 embedding preset 포함 (각 preset마다 별도 클라이언트)
-    cache_key = f"{model_preset}_{qdrant_path}_{QDRANT_COLLECTION}"
+    # Qdrant client 생성 (서버 모드 우선)
+    if QDRANT_USE_SERVER:
+        # 서버 모드: 캐시 키에 컬렉션 이름 포함
+        cache_key = f"{model_preset}_{QDRANT_URL}_{collection_name}"
 
-    if use_singleton and cache_key in _qdrant_client_cache:
-        client = _qdrant_client_cache[cache_key]
+        if use_singleton and cache_key in _qdrant_client_cache:
+            client = _qdrant_client_cache[cache_key]
+        else:
+            client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
+            if use_singleton:
+                _qdrant_client_cache[cache_key] = client
     else:
-        client = QdrantClient(path=qdrant_path)
-        if use_singleton:
-            _qdrant_client_cache[cache_key] = client
+        # 레거시: 로컬 파일 모드
+        qdrant_path = get_qdrant_path()
+        cache_key = f"{model_preset}_{qdrant_path}_{QDRANT_COLLECTION}"
+        collection_name = QDRANT_COLLECTION
+
+        if use_singleton and cache_key in _qdrant_client_cache:
+            client = _qdrant_client_cache[cache_key]
+        else:
+            client = QdrantClient(path=qdrant_path)
+            if use_singleton:
+                _qdrant_client_cache[cache_key] = client
 
     # Qdrant vectorstore 로드
     vectorstore = QdrantVectorStore(
         client=client,
-        collection_name=QDRANT_COLLECTION,
+        collection_name=collection_name,
         embedding=langchain_embeddings,
     )
 

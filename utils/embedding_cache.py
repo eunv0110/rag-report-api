@@ -160,9 +160,10 @@ class EmbeddingCache:
     def save(self):
         """캐시를 파일에 저장"""
         try:
-            # 캐시 저장
+            # 캐시 저장 (딕셔너리 복사본 사용하여 동시 수정 문제 방지)
+            cache_copy = dict(self.cache)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.cache, f, ensure_ascii=False)
+                json.dump(cache_copy, f, ensure_ascii=False)
 
             # 메타데이터 저장
             self.metadata["last_updated"] = datetime.now().isoformat()

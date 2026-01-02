@@ -63,13 +63,34 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 50
 IMAGE_CONTEXT_CHARS = 300
 
-# ✅ Qdrant 설정 - 임베딩 설정에서 db_name 사용
+# ✅ Qdrant 설정 - 통합 서버 모드
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_USE_SERVER = os.getenv("QDRANT_USE_SERVER", "true").lower() == "true"
+
+# 프리셋별 컬렉션 매핑
+PRESET_TO_COLLECTION = {
+    "bge-m3": "notion_docs_bge_m3",
+    "upstage": "notion_docs_upstage",
+    "openai-large": "notion_docs_openai",
+    "gemini-embedding-001": "notion_docs_gemini",
+    "qwen3-embedding-4b": "notion_docs_qwen3"
+}
+
+# 레거시 지원: 로컬 파일 모드
 DB_NAME = MODEL_CONFIG['embeddings'].get('db_name', 'default')
 QDRANT_PATH = str(DATA_DIR / "qdrant_data" / DB_NAME)
+QDRANT_UNIFIED_PATH = str(DATA_DIR / "qdrant_unified")
 QDRANT_COLLECTION = "notion_docs"
 
+def get_collection_name(preset=None):
+    """프리셋에 따른 컬렉션 이름 반환"""
+    if preset is None:
+        preset = os.getenv("MODEL_PRESET", "upstage")
+
+    return PRESET_TO_COLLECTION.get(preset, "notion_docs")
+
 def get_qdrant_path():
-    """현재 MODEL_PRESET 환경변수 기반으로 Qdrant 경로 동적 계산"""
+    """현재 MODEL_PRESET 환경변수 기반으로 Qdrant 경로 동적 계산 (레거시)"""
     config_path = BASE_DIR / "config" / "model_config.yaml"
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)

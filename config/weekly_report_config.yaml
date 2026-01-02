@@ -5,12 +5,12 @@ report_type: "weekly"
 
 # Retriever 설정
 retriever:
-  name: "bge_m3_rrf_ensemble"
-  display_name: "BGE-M3 + RRF Ensemble (Top 6)"
+  name: "qwen3_reranker_bge_m3_rrf_ensemble"
+  display_name: "Qwen3-Reranker-4B + BGE-M3 + RRF Ensemble (Top 6)"
   embedding: "bge-m3"
   type: "rrf_ensemble"
   top_k: 6
-  description: "Precision 완벽 + 빠른 속도"
+  description: "Qwen3 Reranker + Precision 완벽 + 빠른 속도"
 
   # RRF Ensemble 설정
   rrf:
@@ -19,10 +19,10 @@ retriever:
 
 # LLM 설정
 llm:
-  name: "gpt41"
-  display_name: "GPT-4.1"
-  model_id: "azure_ai:gpt-4.1"
-  description: "OpenAI GPT-4.1"
+  name: "deepseek_v31"
+  display_name: "DeepSeek-V3.1"
+  model_id: "azure_ai:DeepSeek-V3.1"
+  description: "DeepSeek 최신 버전"
 
   # Generation 파라미터
   generation:

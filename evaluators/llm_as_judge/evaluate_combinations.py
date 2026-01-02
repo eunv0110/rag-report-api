@@ -202,6 +202,23 @@ def evaluate_all_questions(
     # 종합 순위표 생성
     generate_summary_ranking(final_result, output_dir)
 
+    # Judge 모델 편향 분석
+    print(f"\n{'='*100}")
+    print(f"🔍 Judge 모델 편향 분석 시작")
+    print(f"{'='*100}")
+
+    bias_analysis = evaluator.analyze_judge_bias(
+        all_evaluations=all_evaluations,
+        judge_model=judge_model,
+        output_dir=output_dir
+    )
+
+    final_result['bias_analysis'] = bias_analysis
+
+    # 편향 분석 포함한 최종 결과 재저장
+    with open(overall_output_file, 'w', encoding='utf-8') as f:
+        json.dump(final_result, f, indent=2, ensure_ascii=False)
+
     return final_result
 
 
@@ -322,7 +339,7 @@ def main():
     parser.add_argument(
         "--judge-model",
         type=str,
-        default="gpt-4o",
+        default="gpt-5.1",
         help="평가에 사용할 LLM 모델 (기본: gpt-4o)"
     )
     parser.add_argument(

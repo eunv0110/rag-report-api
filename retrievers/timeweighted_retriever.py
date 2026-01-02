@@ -280,7 +280,8 @@ def get_time_weighted_retriever(
     if use_singleton and cache_key in _qdrant_client_cache:
         client = _qdrant_client_cache[cache_key]
     else:
-        client = QdrantClient(path=qdrant_path)
+        # Qdrant 서버 모드로 변경 (동시 접근 가능)
+        client = QdrantClient(url="http://localhost:6333")
         if use_singleton:
             _qdrant_client_cache[cache_key] = client
 

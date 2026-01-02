@@ -29,57 +29,47 @@ class LLMAsJudgeEvaluator:
     # 평가 기준 정의
     EVALUATION_CRITERIA = {
         "weekly_report": {
-            "completeness": {
-                "name": "완전성 (Completeness)",
-                "description": "주요 지표, 활동, 이슈, 다음 주 계획이 모두 포함되었는가?",
-                "weight": 0.25
-            },
-            "relevance": {
-                "name": "관련성 (Relevance)",
-                "description": "질문과 관련된 정보만 포함하고 불필요한 정보는 제외되었는가?",
-                "weight": 0.20
-            },
             "accuracy": {
                 "name": "정확성 (Accuracy)",
                 "description": "검색된 문서의 내용을 정확하게 반영하고 있는가? 환각은 없는가?",
+                "weight": 0.30
+            },
+            "completeness": {
+                "name": "완결성 (Completeness)",
+                "description": "주요 지표, 활동, 이슈, 다음 주 계획 등 필요한 정보가 빠짐없이 포함되었는가?",
                 "weight": 0.25
             },
             "structure": {
                 "name": "구조화 (Structure)",
-                "description": "주간 보고서 형식에 적합하게 구조화되었는가?",
-                "weight": 0.15
+                "description": "주간 보고서 형식에 적합하게 논리적으로 구조화되었는가?",
+                "weight": 0.25
             },
-            "readability": {
-                "name": "가독성 (Readability)",
-                "description": "읽기 쉽고 이해하기 쉬운가? 적절한 포맷팅이 되어 있는가?",
-                "weight": 0.15
+            "detail": {
+                "name": "상세도 (Detail)",
+                "description": "적절한 수준의 상세 정보를 제공하는가? 너무 간략하거나 지나치게 장황하지 않은가?",
+                "weight": 0.20
             }
         },
         "executive_report": {
+            "structural_completeness": {
+                "name": "구조 완성도 (Structural Completeness)",
+                "description": "보고서 구조가 논리적이고 완성도가 높은가? 경영진 보고서로서 적절한 구조인가?",
+                "weight": 0.30
+            },
+            "document_reference_accuracy": {
+                "name": "문서 참조 정확성 (Document Reference Accuracy)",
+                "description": "검색된 문서의 내용을 정확하게 참조하고 반영하고 있는가? 환각은 없는가?",
+                "weight": 0.25
+            },
+            "practical_value": {
+                "name": "내용 실용성 (Practical Value)",
+                "description": "경영진이 의사결정에 실제로 활용할 수 있는 실용적인 정보와 인사이트를 제공하는가?",
+                "weight": 0.25
+            },
             "conciseness": {
                 "name": "간결성 (Conciseness)",
-                "description": "핵심만 간결하게 요약되었는가? 불필요한 세부사항은 없는가?",
-                "weight": 0.25
-            },
-            "strategic_value": {
-                "name": "전략적 가치 (Strategic Value)",
-                "description": "경영진이 의사결정에 활용할 수 있는 인사이트를 제공하는가?",
-                "weight": 0.25
-            },
-            "accuracy": {
-                "name": "정확성 (Accuracy)",
-                "description": "검색된 문서의 내용을 정확하게 반영하고 있는가? 환각은 없는가?",
-                "weight": 0.25
-            },
-            "clarity": {
-                "name": "명확성 (Clarity)",
-                "description": "명확하고 이해하기 쉬운 언어로 작성되었는가?",
-                "weight": 0.15
-            },
-            "priority": {
-                "name": "우선순위 (Priority)",
-                "description": "중요한 정보가 먼저 제시되고 우선순위가 명확한가?",
-                "weight": 0.10
+                "description": "핵심만 간결하게 요약되었는가? 불필요한 세부사항 없이 명료한가?",
+                "weight": 0.20
             }
         }
     }
@@ -177,7 +167,8 @@ class LLMAsJudgeEvaluator:
         answer: str,
         report_type: str,
         criterion_key: str,
-        criterion_info: Dict[str, Any]
+        criterion_info: Dict[str, Any],
+        max_retries: int = 3
     ) -> Dict[str, Any]:
         """단일 평가 기준으로 답변 평가
 
@@ -187,6 +178,7 @@ class LLMAsJudgeEvaluator:
             report_type: 보고서 타입
             criterion_key: 평가 기준 키
             criterion_info: 평가 기준 정보
+            max_retries: 최대 재시도 횟수
 
         Returns:
             평가 결과
@@ -200,53 +192,181 @@ class LLMAsJudgeEvaluator:
         )
 
         messages = [
-            {"role": "system", "content": "당신은 보고서 품질을 평가하는 전문가입니다. 공정하고 객관적으로 평가해주세요."},
+            {"role": "system", "content": "당신은 보고서 품질을 평가하는 전문가입니다. 공정하고 객관적으로 평가해주세요. 반드시 유효한 JSON 형식으로 응답해야 합니다."},
             {"role": "user", "content": prompt}
         ]
 
-        try:
-            # Provider에 따라 다른 방식으로 호출
-            if self.provider == "azure_ai":
-                response = self.llm.invoke(messages)
-                result = json.loads(response.content)
-            else:  # openrouter
-                response = self.client.chat.completions.create(
-                    model=self.judge_model,
-                    messages=messages,
-                    max_tokens=4000,
-                    temperature=self.temperature
-                )
-                content = response.choices[0].message.content
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    print(f"   🔄 재시도 {attempt}/{max_retries-1}...")
+                    import time
+                    time.sleep(2)  # 재시도 전 2초 대기
 
-                # JSON 추출 (```json ... ``` 형식 지원)
+                # Provider에 따라 다른 방식으로 호출
+                if self.provider == "azure_ai":
+                    # Azure AI의 경우 - langchain을 통한 호출
+                    # max_completion_tokens 또는 max_tokens를 시도
+                    try:
+                        # GPT-5.1 등 새 모델은 max_completion_tokens 사용
+                        response = self.llm.invoke(messages, max_completion_tokens=8000)
+                        content = response.content
+                    except Exception as e:
+                        error_msg = str(e)
+                        # max_tokens로 재시도
+                        if "max_completion_tokens" in error_msg or "unsupported" in error_msg.lower():
+                            try:
+                                response = self.llm.invoke(messages, max_tokens=8000)
+                                content = response.content
+                            except:
+                                # 둘 다 안되면 파라미터 없이 호출
+                                response = self.llm.invoke(messages)
+                                content = response.content
+                        else:
+                            # 다른 에러면 파라미터 없이 재시도
+                            response = self.llm.invoke(messages)
+                            content = response.content
+                else:  # openrouter
+                    # JSON 모드를 시도하되, 실패하면 일반 모드로 폴백
+                    try:
+                        response = self.client.chat.completions.create(
+                            model=self.judge_model,
+                            messages=messages,
+                            max_tokens=8000,  # 토큰 제한 증가 (4000 -> 8000)
+                            temperature=self.temperature,
+                            response_format={"type": "json_object"}  # JSON 모드 활성화
+                        )
+                        content = response.choices[0].message.content
+                    except Exception as json_mode_error:
+                        # JSON 모드 실패 시 일반 모드로 재시도
+                        if attempt == 0:
+                            print(f"⚠️  JSON 모드 실패, 일반 모드로 재시도: {json_mode_error}")
+                        response = self.client.chat.completions.create(
+                            model=self.judge_model,
+                            messages=messages,
+                            max_tokens=8000,
+                            temperature=self.temperature
+                        )
+                        content = response.choices[0].message.content
+
+                # 응답 내용 확인
+                if not content or content.strip() == "":
+                    raise ValueError("LLM이 빈 응답을 반환했습니다")
+
+                # JSON 추출 - 다양한 형식 지원
+                result = None
+
+                # 1. ```json ... ``` 형식
                 json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
                 if json_match:
-                    result = json.loads(json_match.group(1))
-                else:
-                    result = json.loads(content)
+                    try:
+                        result = json.loads(json_match.group(1))
+                    except json.JSONDecodeError:
+                        pass
 
-            return {
-                "criterion": criterion_key,
-                "criterion_name": criterion_info["name"],
-                "weight": criterion_info["weight"],
-                "score": result["score"],
-                "weighted_score": result["score"] * criterion_info["weight"],
-                "reasoning": result["reasoning"],
-                "strengths": result.get("strengths", []),
-                "weaknesses": result.get("weaknesses", [])
-            }
-        except Exception as e:
-            print(f"⚠️  평가 중 오류 발생 ({criterion_key}): {e}")
-            return {
-                "criterion": criterion_key,
-                "criterion_name": criterion_info["name"],
-                "weight": criterion_info["weight"],
-                "score": 0,
-                "weighted_score": 0,
-                "reasoning": f"평가 실패: {str(e)}",
-                "strengths": [],
-                "weaknesses": []
-            }
+                # 2. ``` ... ``` 형식 (json 키워드 없이)
+                if result is None:
+                    json_match = re.search(r'```\s*(\{.*?\})\s*```', content, re.DOTALL)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group(1))
+                        except json.JSONDecodeError:
+                            pass
+
+                # 3. 순수 JSON (코드 블록 없이)
+                if result is None:
+                    try:
+                        result = json.loads(content)
+                    except json.JSONDecodeError:
+                        # 4. JSON 객체 부분만 추출 시도 (non-greedy)
+                        json_match = re.search(r'\{.*?\}', content, re.DOTALL)
+                        if json_match:
+                            try:
+                                result = json.loads(json_match.group(0))
+                            except json.JSONDecodeError:
+                                pass
+
+                        # 5. 가장 긴 JSON 객체 추출 시도 (greedy, 불완전한 JSON 처리)
+                        if result is None:
+                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+                            if json_match:
+                                try:
+                                    result = json.loads(json_match.group(0))
+                                except json.JSONDecodeError:
+                                    pass
+
+                # JSON 파싱 실패 시 - 부분 데이터 수동 추출 시도
+                if result is None:
+                    if attempt == 0:
+                        print(f"⚠️  JSON 파싱 실패. 수동 추출 시도 중...")
+                        print(f"원본 응답:\n{content[:500]}")
+
+                    # 수동으로 필드 추출
+                    score_match = re.search(r'"score"\s*:\s*(\d+)', content)
+                    reasoning_match = re.search(r'"reasoning"\s*:\s*"([^"]*(?:\\"[^"]*)*)"', content, re.DOTALL)
+
+                    if score_match and reasoning_match:
+                        result = {
+                            "score": int(score_match.group(1)),
+                            "reasoning": reasoning_match.group(1),
+                            "strengths": [],
+                            "weaknesses": []
+                        }
+
+                        # strengths 추출 시도
+                        strengths_match = re.search(r'"strengths"\s*:\s*\[(.*?)\]', content, re.DOTALL)
+                        if strengths_match:
+                            strengths_str = strengths_match.group(1)
+                            strengths = re.findall(r'"([^"]*)"', strengths_str)
+                            result["strengths"] = strengths
+
+                        # weaknesses 추출 시도
+                        weaknesses_match = re.search(r'"weaknesses"\s*:\s*\[(.*?)\]', content, re.DOTALL)
+                        if weaknesses_match:
+                            weaknesses_str = weaknesses_match.group(1)
+                            weaknesses = re.findall(r'"([^"]*)"', weaknesses_str)
+                            result["weaknesses"] = weaknesses
+
+                        print(f"✅ 수동 추출 성공: score={result['score']}")
+                    else:
+                        raise ValueError("JSON 파싱 실패 - score 또는 reasoning을 찾을 수 없음")
+
+                # 성공 시 결과 반환
+                return {
+                    "criterion": criterion_key,
+                    "criterion_name": criterion_info["name"],
+                    "weight": criterion_info["weight"],
+                    "score": result.get("score", 0),
+                    "weighted_score": result.get("score", 0) * criterion_info["weight"],
+                    "reasoning": result.get("reasoning", ""),
+                    "strengths": result.get("strengths", []),
+                    "weaknesses": result.get("weaknesses", [])
+                }
+
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    print(f"⚠️  시도 {attempt + 1} 실패: {e}")
+                continue
+
+        # 모든 재시도 실패 시
+        print(f"❌ 평가 중 오류 발생 ({criterion_key}): {last_error}")
+        print(f"   모델: {self.judge_model}, Provider: {self.provider}")
+        print(f"   {max_retries}번 재시도 모두 실패")
+        import traceback
+        print(f"   상세 오류:\n{traceback.format_exc()}")
+        return {
+            "criterion": criterion_key,
+            "criterion_name": criterion_info["name"],
+            "weight": criterion_info["weight"],
+            "score": 0,
+            "weighted_score": 0,
+            "reasoning": f"평가 실패 ({max_retries}번 재시도): {str(last_error)}",
+            "strengths": [],
+            "weaknesses": [],
+            "error": str(last_error)
+        }
 
     def evaluate_answer(
         self,
@@ -572,6 +692,177 @@ class LLMAsJudgeEvaluator:
         df = pd.DataFrame(rows)
         df.to_csv(output_path, index=False, encoding='utf-8-sig')
         print(f"📊 상세 보고서 저장: {output_path}")
+
+    def analyze_judge_bias(
+        self,
+        all_evaluations: List[Dict[str, Any]],
+        judge_model: str,
+        output_dir: Path
+    ) -> Dict[str, Any]:
+        """Judge 모델의 평가 편향 분석
+
+        자사 모델 선호 편향, 일관성 등을 분석합니다.
+
+        Args:
+            all_evaluations: 모든 평가 결과 리스트
+            judge_model: 평가에 사용한 모델
+            output_dir: 결과 저장 디렉토리
+
+        Returns:
+            편향 분석 결과
+        """
+        print(f"\n{'='*100}")
+        print(f"🔍 Judge 모델 편향 분석: {judge_model}")
+        print(f"{'='*100}")
+
+        # 제조사별 LLM 분류
+        vendor_map = {
+            "openai": ["gpt", "o1"],
+            "anthropic": ["claude"],
+            "meta": ["llama"],
+            "microsoft": ["phi"],
+            "deepseek": ["deepseek"],
+            "google": ["gemini"],
+            "alibaba": ["qwen"]
+        }
+
+        # Judge 모델의 제조사 식별
+        judge_vendor = None
+        for vendor, keywords in vendor_map.items():
+            if any(keyword in judge_model.lower() for keyword in keywords):
+                judge_vendor = vendor
+                break
+
+        print(f"📌 Judge 모델 제조사: {judge_vendor or '알 수 없음'}")
+
+        # LLM별 점수 및 순위 수집
+        llm_rankings = {}
+        llm_scores = {}
+        llm_vendors = {}
+
+        for evaluation in all_evaluations:
+            for rank, (llm_name, score) in enumerate(evaluation['ranking'], 1):
+                if llm_name not in llm_rankings:
+                    llm_rankings[llm_name] = []
+                    llm_scores[llm_name] = []
+
+                    # LLM 제조사 식별
+                    llm_vendor = None
+                    for vendor, keywords in vendor_map.items():
+                        if any(keyword in llm_name.lower() for keyword in keywords):
+                            llm_vendor = vendor
+                            break
+                    llm_vendors[llm_name] = llm_vendor
+
+                llm_rankings[llm_name].append(rank)
+                llm_scores[llm_name].append(score)
+
+        # 통계 계산
+        stats = []
+        for llm_name in llm_scores.keys():
+            scores = llm_scores[llm_name]
+            rankings = llm_rankings[llm_name]
+            llm_vendor = llm_vendors[llm_name]
+            is_same_vendor = (llm_vendor == judge_vendor) if (llm_vendor and judge_vendor) else False
+
+            stats.append({
+                "llm_name": llm_name,
+                "llm_vendor": llm_vendor or "unknown",
+                "is_same_vendor": is_same_vendor,
+                "avg_score": sum(scores) / len(scores),
+                "std_score": pd.Series(scores).std(),
+                "avg_rank": sum(rankings) / len(rankings),
+                "first_place_count": rankings.count(1),
+                "last_place_count": rankings.count(max(rankings)),
+                "num_evaluations": len(scores)
+            })
+
+        # DataFrame 생성 및 정렬
+        df_stats = pd.DataFrame(stats)
+        df_stats = df_stats.sort_values("avg_score", ascending=False)
+
+        # 자사 vs 타사 비교
+        if judge_vendor:
+            same_vendor_df = df_stats[df_stats["is_same_vendor"] == True]
+            other_vendor_df = df_stats[df_stats["is_same_vendor"] == False]
+
+            bias_analysis = {
+                "judge_model": judge_model,
+                "judge_vendor": judge_vendor,
+                "same_vendor_avg_score": same_vendor_df["avg_score"].mean() if len(same_vendor_df) > 0 else 0,
+                "other_vendor_avg_score": other_vendor_df["avg_score"].mean() if len(other_vendor_df) > 0 else 0,
+                "same_vendor_avg_rank": same_vendor_df["avg_rank"].mean() if len(same_vendor_df) > 0 else 0,
+                "other_vendor_avg_rank": other_vendor_df["avg_rank"].mean() if len(other_vendor_df) > 0 else 0,
+                "score_difference": (same_vendor_df["avg_score"].mean() - other_vendor_df["avg_score"].mean()) if (len(same_vendor_df) > 0 and len(other_vendor_df) > 0) else 0,
+                "num_same_vendor_llms": len(same_vendor_df),
+                "num_other_vendor_llms": len(other_vendor_df)
+            }
+
+            print(f"\n📊 자사 모델 편향 분석:")
+            print(f"  자사 모델 평균 점수: {bias_analysis['same_vendor_avg_score']:.3f}")
+            print(f"  타사 모델 평균 점수: {bias_analysis['other_vendor_avg_score']:.3f}")
+            print(f"  점수 차이: {bias_analysis['score_difference']:.3f}")
+            print(f"  자사 모델 평균 순위: {bias_analysis['same_vendor_avg_rank']:.2f}")
+            print(f"  타사 모델 평균 순위: {bias_analysis['other_vendor_avg_rank']:.2f}")
+
+            if bias_analysis['score_difference'] > 0.5:
+                print(f"\n⚠️  경고: 자사 모델 선호 편향이 감지되었습니다 (차이: {bias_analysis['score_difference']:.3f})")
+            elif bias_analysis['score_difference'] < -0.5:
+                print(f"\n⚠️  경고: 자사 모델에 대한 부정적 편향이 감지되었습니다 (차이: {bias_analysis['score_difference']:.3f})")
+            else:
+                print(f"\n✅ 자사 모델 편향이 적절한 수준입니다 (차이: {bias_analysis['score_difference']:.3f})")
+        else:
+            bias_analysis = {
+                "judge_model": judge_model,
+                "judge_vendor": "unknown",
+                "message": "Judge 모델의 제조사를 식별할 수 없어 편향 분석을 수행할 수 없습니다."
+            }
+
+        # 상세 통계 저장
+        stats_csv = output_dir / f"bias_analysis_stats_{judge_model.replace('/', '_')}.csv"
+        df_stats.to_csv(stats_csv, index=False, encoding='utf-8-sig')
+        print(f"\n💾 상세 통계 저장: {stats_csv}")
+
+        # 편향 분석 결과 저장
+        bias_json = output_dir / f"bias_analysis_{judge_model.replace('/', '_')}.json"
+        bias_result = {
+            **bias_analysis,
+            "detailed_stats": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+        with open(bias_json, 'w', encoding='utf-8') as f:
+            json.dump(bias_result, f, indent=2, ensure_ascii=False)
+        print(f"💾 편향 분석 결과 저장: {bias_json}")
+
+        # 시각화를 위한 마크다운 리포트
+        md_file = output_dir / f"bias_analysis_{judge_model.replace('/', '_')}.md"
+        with open(md_file, 'w', encoding='utf-8') as f:
+            f.write(f"# Judge 모델 편향 분석 리포트\n\n")
+            f.write(f"**Judge 모델**: {judge_model}\n\n")
+            f.write(f"**Judge 제조사**: {judge_vendor or '알 수 없음'}\n\n")
+            f.write(f"**분석 일시**: {datetime.now().isoformat()}\n\n")
+            f.write("---\n\n")
+
+            if judge_vendor:
+                f.write("## 자사 모델 편향 분석\n\n")
+                f.write(f"- **자사 모델 평균 점수**: {bias_analysis['same_vendor_avg_score']:.3f}\n")
+                f.write(f"- **타사 모델 평균 점수**: {bias_analysis['other_vendor_avg_score']:.3f}\n")
+                f.write(f"- **점수 차이**: {bias_analysis['score_difference']:.3f}\n")
+                f.write(f"- **자사 모델 평균 순위**: {bias_analysis['same_vendor_avg_rank']:.2f}\n")
+                f.write(f"- **타사 모델 평균 순위**: {bias_analysis['other_vendor_avg_rank']:.2f}\n\n")
+
+                if abs(bias_analysis['score_difference']) > 0.5:
+                    f.write(f"⚠️ **편향 경고**: 점수 차이가 0.5를 초과합니다.\n\n")
+                else:
+                    f.write(f"✅ **편향 적정**: 점수 차이가 허용 범위 내입니다.\n\n")
+
+            f.write("## LLM별 상세 통계\n\n")
+            f.write(df_stats.to_markdown(index=False))
+            f.write("\n")
+
+        print(f"📝 마크다운 리포트 저장: {md_file}")
+
+        return bias_result
 
 
 def main():

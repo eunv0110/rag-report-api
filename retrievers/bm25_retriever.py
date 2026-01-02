@@ -10,35 +10,51 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from qdrant_client import QdrantClient
-from config.settings import QDRANT_COLLECTION, get_qdrant_path
+from config.settings import (
+    QDRANT_COLLECTION,
+    QDRANT_URL,
+    QDRANT_USE_SERVER,
+    get_qdrant_path,
+    get_collection_name
+)
 
 # 싱글톤 패턴: 문서 캐싱 (Qdrant lock 방지)
 _documents_cache = {}
 
 
-def load_documents_from_qdrant(date_filter: tuple = None) -> List[Document]:
+def load_documents_from_qdrant(date_filter: tuple = None, preset: str = None) -> List[Document]:
     """
     Qdrant에서 모든 문서를 로드하여 LangChain Document로 변환
 
     Args:
         date_filter: (start_date, end_date) 튜플 (ISO 형식)
+        preset: 임베딩 프리셋 (None이면 환경변수 사용)
     """
-    # Qdrant 경로 동적 계산
-    qdrant_path = get_qdrant_path()
+    import os
 
-    # 캐시 키에 date_filter 포함
-    cache_key = (qdrant_path, date_filter)
+    # 컬렉션 이름 결정
+    collection_name = get_collection_name(preset)
+
+    # Qdrant 클라이언트 생성 (서버 모드 우선)
+    if QDRANT_USE_SERVER:
+        # 캐시 키에 컬렉션 이름 포함
+        cache_key = (QDRANT_URL, collection_name, date_filter)
+        client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
+    else:
+        # 레거시: 로컬 파일 모드
+        qdrant_path = get_qdrant_path()
+        cache_key = (qdrant_path, QDRANT_COLLECTION, date_filter)
+        client = QdrantClient(path=qdrant_path)
+        collection_name = QDRANT_COLLECTION
 
     # 캐시 확인
     if cache_key in _documents_cache:
         return _documents_cache[cache_key]
 
-    client = QdrantClient(path=qdrant_path)
-
     try:
         # scroll 파라미터 설정
         scroll_params = {
-            "collection_name": QDRANT_COLLECTION,
+            "collection_name": collection_name,
             "limit": 10000,
             "with_payload": True,
             "with_vectors": False  # 벡터는 필요 없음
@@ -129,19 +145,20 @@ def load_documents_from_qdrant(date_filter: tuple = None) -> List[Document]:
         client.close()
 
 
-def get_bm25_retriever(k: int = 5, date_filter: tuple = None) -> BM25Retriever:
+def get_bm25_retriever(k: int = 5, date_filter: tuple = None, preset: str = None) -> BM25Retriever:
     """
     BM25 Retriever 생성
 
     Args:
         k: 반환할 문서 수
         date_filter: (start_date, end_date) 튜플 (ISO 형식)
+        preset: 임베딩 프리셋 (None이면 환경변수 사용)
 
     Returns:
         BM25Retriever 인스턴스
     """
     # Qdrant에서 문서 로드
-    documents = load_documents_from_qdrant(date_filter=date_filter)
+    documents = load_documents_from_qdrant(date_filter=date_filter, preset=preset)
 
     # 문서가 없는 경우 처리
     if not documents:
