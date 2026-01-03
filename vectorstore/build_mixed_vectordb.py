@@ -10,8 +10,8 @@ from config.settings import *
 from models.embeddings.factory import get_embedder
 from models.vision.factory import get_vision_model
 from core.chunker import process_page_data
-from utils.file_utils import load_json
-from utils.langfuse_utils import get_langfuse_client, trace_operation
+from utils.files import load_json
+from utils.langfuse import get_langfuse_client, trace_operation
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from langchain.chat_models import init_chat_model

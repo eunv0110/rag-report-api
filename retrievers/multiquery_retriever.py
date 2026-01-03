@@ -14,7 +14,7 @@ from typing import List, Optional, Dict, Any
 import os
 from config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT
 from retrievers.dense_retriever import get_dense_retriever
-from prompts.prompt_manager import PromptManager
+from utils.common import load_prompt
 
 
 class MultiQueryRetriever(BaseRetriever):
@@ -79,9 +79,8 @@ class MultiQueryRetriever(BaseRetriever):
             확장된 쿼리 리스트 (원본 포함)
         """
         # 프롬프트 템플릿 로드
-        prompt_manager = PromptManager()
-        prompt = prompt_manager.format_prompt(
-            "service/multiquery.txt",
+        prompt_template = load_prompt("prompts/templates/service/multiquery.txt")
+        prompt = prompt_template.format(
             num_queries=self.num_queries - 1,
             query=query
         )

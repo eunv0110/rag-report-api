@@ -1,17 +1,16 @@
 """임베딩 캐시 유틸리티
 
 평가 시 동일한 질문의 임베딩을 재사용하여 API 비용과 시간을 절약합니다.
-LangChain의 캐시 시스템을 사용합니다.
+LangChain의 CacheBackedEmbeddings와 LocalFileStore를 사용합니다.
 """
 
 import json
 import hashlib
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime
 from langchain_classic.embeddings import CacheBackedEmbeddings
 from langchain_classic.storage import LocalFileStore
-from langchain_core.embeddings import Embeddings
 
 
 class EmbeddingCache:
@@ -116,9 +115,8 @@ class EmbeddingCache:
         self,
         texts: List[str],
         model: str = "default"
-    ) -> tuple[List[Optional[List[float]]], List[int]]:
-        """
-        배치로 캐시 조회
+    ) -> Tuple[List[Optional[List[float]]], List[int]]:
+        """배치로 캐시 조회
 
         Args:
             texts: 임베딩할 텍스트 리스트
@@ -145,9 +143,8 @@ class EmbeddingCache:
         texts: List[str],
         embeddings: List[List[float]],
         model: str = "default"
-    ):
-        """
-        배치로 캐시에 저장
+    ) -> None:
+        """배치로 캐시에 저장
 
         Args:
             texts: 임베딩할 텍스트 리스트
@@ -157,8 +154,12 @@ class EmbeddingCache:
         for text, embedding in zip(texts, embeddings):
             self.set(text, embedding, model)
 
-    def save(self):
-        """캐시를 파일에 저장"""
+    def save(self) -> bool:
+        """캐시를 파일에 저장
+
+        Returns:
+            저장 성공 여부
+        """
         try:
             # 캐시 저장 (딕셔너리 복사본 사용하여 동시 수정 문제 방지)
             cache_copy = dict(self.cache)
@@ -182,7 +183,7 @@ class EmbeddingCache:
             print(f"❌ 캐시 저장 실패: {e}")
             return False
 
-    def clear(self):
+    def clear(self) -> None:
         """캐시 초기화"""
         self.cache = {}
         self.metadata = {}
@@ -207,7 +208,7 @@ class EmbeddingCache:
             "cache_size_mb": self.cache_file.stat().st_size / (1024 * 1024) if self.cache_file.exists() else 0
         }
 
-    def print_stats(self):
+    def print_stats(self) -> None:
         """캐시 통계 출력"""
         stats = self.get_stats()
         print("\n📊 임베딩 캐시 통계:")
@@ -244,8 +245,7 @@ class CachedEmbedder:
         )
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """
-        LangChain 캐시를 사용하여 텍스트 임베딩 생성
+        """LangChain 캐시를 사용하여 텍스트 임베딩 생성
 
         Args:
             texts: 임베딩할 텍스트 리스트
@@ -262,8 +262,7 @@ class CachedEmbedder:
         return embeddings
 
     def embed_query(self, query: str) -> List[float]:
-        """
-        단일 쿼리 임베딩 (LangChain 캐시 사용)
+        """단일 쿼리 임베딩 (LangChain 캐시 사용)
 
         Args:
             query: 임베딩할 쿼리
@@ -275,8 +274,12 @@ class CachedEmbedder:
         embedding = self.cached_embedder.embed_query(query)
         return embedding
 
-    def save_cache(self):
-        """캐시를 파일에 저장 (LangChain은 자동 저장)"""
+    def save_cache(self) -> bool:
+        """캐시를 파일에 저장 (LangChain은 자동 저장)
+
+        Returns:
+            저장 성공 여부
+        """
         # LangChain의 LocalFileStore는 자동으로 저장됨
         # 레거시 캐시 통계 저장
         return self.cache.save()
@@ -285,6 +288,6 @@ class CachedEmbedder:
         """캐시 통계 반환"""
         return self.cache.get_stats()
 
-    def print_stats(self):
+    def print_stats(self) -> None:
         """캐시 통계 출력"""
         self.cache.print_stats()

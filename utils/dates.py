@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""날짜 관련 유틸리티 함수"""
+"""날짜 관련 유틸리티 함수
 
+자연어 날짜 표현을 파싱하고 ISO 8601 형식으로 변환하는 기능을 제공합니다.
+"""
+
+import os
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
-import os
 
 
 def parse_date_range(
@@ -50,8 +53,18 @@ def parse_explicit_dates(
     start_date: Optional[str],
     end_date: Optional[str]
 ) -> Optional[Tuple[str, str]]:
-    """명시적 날짜를 ISO 형식으로 변환"""
+    """명시적 날짜를 ISO 8601 형식으로 변환
 
+    Args:
+        start_date: 시작 날짜 (YYYY-MM-DD)
+        end_date: 종료 날짜 (YYYY-MM-DD)
+
+    Returns:
+        (start_iso, end_iso) 튜플 또는 None
+
+    Raises:
+        ValueError: 날짜 형식이 올바르지 않을 때
+    """
     if not start_date and not end_date:
         return None
 
@@ -66,7 +79,7 @@ def parse_explicit_dates(
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-        # ISO 8601 형식으로 변환 (Notion 시간 형식)
+        # ISO 8601 형식으로 변환
         start_iso = start_dt.strftime("%Y-%m-%dT00:00:00.000Z")
         end_iso = end_dt.strftime("%Y-%m-%dT23:59:59.999Z")
 

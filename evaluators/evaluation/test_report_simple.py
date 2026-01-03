@@ -24,8 +24,9 @@ from langchain.chat_models import init_chat_model
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT, EVALUATION_CONFIG
-from utils.langfuse_utils import get_langfuse_client
-from utils.date_utils import parse_date_range, extract_date_filter_from_question
+from utils.langfuse import get_langfuse_client
+from utils.dates import parse_date_range, extract_date_filter_from_question
+from utils.common import load_prompt
 
 # 리트리버 임포트
 from retrievers.ensemble_retriever import get_ensemble_retriever
@@ -57,11 +58,10 @@ def get_report_config(report_type: str) -> Dict[str, Any]:
     }
 
 
-def load_prompt(prompt_file: str, report_type: str) -> str:
-    """프롬프트 파일 로드"""
-    prompt_path = Path(__file__).parent.parent / "prompts" / "templates" / "evaluation" / f"{report_type}_report" / prompt_file
-    with open(prompt_path, 'r', encoding='utf-8') as f:
-        return f.read()
+def _load_evaluation_prompt(prompt_file: str, report_type: str) -> str:
+    """평가용 프롬프트 파일 로드 (헬퍼 함수)"""
+    prompt_path = f"prompts/templates/evaluation/{report_type}_report/{prompt_file}"
+    return load_prompt(prompt_path)
 
 
 def load_test_questions(n: int = 5) -> List[Dict[str, Any]]:
@@ -96,8 +96,8 @@ def generate_answer_with_llm(query: str, docs: list, llm_config: dict, report_ty
     context_text = "\n".join(context_parts)
 
     # 프롬프트 로드
-    system_prompt = load_prompt("system_prompt.txt", report_type)
-    answer_generation_template = load_prompt("answer_generation_prompt.txt", report_type)
+    system_prompt = _load_evaluation_prompt("system_prompt.txt", report_type)
+    answer_generation_template = _load_evaluation_prompt("answer_generation_prompt.txt", report_type)
 
     # 템플릿에 변수 대입
     user_prompt = answer_generation_template.replace("{context}", context_text).replace("{question}", query)

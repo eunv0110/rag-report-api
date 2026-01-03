@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import *
-from utils.langfuse_utils import get_langfuse_client, trace_operation
+from utils.langfuse import get_langfuse_client, trace_operation
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 import uuid

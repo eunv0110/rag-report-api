@@ -19,8 +19,8 @@ from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config.settings import EVALUATION_CONFIG
-from utils.langfuse_utils import get_langfuse_client
-from utils.common_utils import save_embedding_cache
+from utils.langfuse import get_langfuse_client
+from utils.common import save_embedding_cache
 
 # Reranker 테스트 스크립트에서 함수 재사용
 from evaluators.evaluation.evaluate_reranker import (

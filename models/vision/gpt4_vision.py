@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from openai import OpenAI
 from models.base import BaseVisionModel
-from prompts.prompt_manager import PromptManager
+from utils.common import load_prompt
 
 class GPT4Vision(BaseVisionModel):
     def __init__(
@@ -18,8 +18,7 @@ class GPT4Vision(BaseVisionModel):
         self.model = model
         self.max_tokens = max_tokens
         self.client = OpenAI(api_key=api_key, base_url=base_url)
-        self.prompt_manager = PromptManager()
-        self.prompt_template = prompt_template
+        self.prompt_template_path = f"prompts/templates/{prompt_template}"
     
     def describe_image(self, image_path: str, context: Dict[str, Any]) -> str:
         """이미지 설명 생성"""
@@ -44,10 +43,9 @@ class GPT4Vision(BaseVisionModel):
                 return f"[이미지 로드 실패: {e}]"
         
         media_type = "image/png" if ".png" in image_path.lower() else "image/jpeg"
-        
 
-        prompt = self.prompt_manager.format_prompt(
-            self.prompt_template,
+        prompt_template = load_prompt(self.prompt_template_path)
+        prompt = prompt_template.format(
             page_title=context.get('page_title', ''),
             section_title=context.get('section_title', ''),
             text_before=context.get('text_before', '')[:100],

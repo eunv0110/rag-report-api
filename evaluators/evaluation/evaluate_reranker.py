@@ -26,9 +26,10 @@ from sentence_transformers import CrossEncoder
 from FlagEmbedding import FlagReranker
 
 from config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT, EVALUATION_CONFIG
-from utils.langfuse_utils import get_langfuse_client
-from utils.date_utils import parse_date_range, extract_date_filter_from_question
-from utils.common_utils import (
+from utils.langfuse import get_langfuse_client
+from utils.dates import parse_date_range, extract_date_filter_from_question
+from utils.common import (
+    load_prompt,
     load_evaluation_dataset,
     create_trace_and_generation,
     add_retrieval_quality_score,
@@ -211,13 +212,10 @@ def get_report_config(report_type: str) -> Dict[str, Any]:
     }
 
 
-def load_prompt(prompt_file: str, report_type: str) -> str:
-    """프롬프트 파일 로드"""
-    # evaluators/evaluation/test_report_reranker.py에서 프로젝트 루트로 이동
-    project_root = Path(__file__).parent.parent.parent
-    prompt_path = project_root / "prompts" / "templates" / "service" / f"{report_type}_report" / prompt_file
-    with open(prompt_path, 'r', encoding='utf-8') as f:
-        return f.read()
+def _load_report_prompt(prompt_file: str, report_type: str) -> str:
+    """보고서용 프롬프트 파일 로드 (헬퍼 함수)"""
+    prompt_path = f"prompts/templates/service/{report_type}_report/{prompt_file}"
+    return load_prompt(prompt_path)
 
 
 def load_test_questions(n: int = 5) -> List[Dict[str, Any]]:
@@ -406,8 +404,8 @@ def generate_answer_with_llm(query: str, docs: list, llm_config: dict, report_ty
     context_text = "\n".join(context_parts)
 
     # 프롬프트 로드
-    system_prompt = load_prompt("system_prompt.txt", report_type)
-    answer_generation_template = load_prompt("answer_generation_prompt.txt", report_type)
+    system_prompt = _load_report_prompt("system_prompt.txt", report_type)
+    answer_generation_template = _load_report_prompt("answer_generation_prompt.txt", report_type)
 
     # 템플릿에 변수 대입
     user_prompt = answer_generation_template.replace("{context}", context_text).replace("{question}", query)
@@ -956,7 +954,7 @@ def evaluate_single_query_with_reranker(
         contexts = ["검색 결과가 없습니다."]
 
     # LLM 답변 생성 (common_utils의 generate_llm_answer 사용)
-    from utils.common_utils import generate_llm_answer
+    from utils.common import generate_llm_answer
     answer = generate_llm_answer(
         question=question,
         contexts=contexts,
@@ -1082,12 +1080,10 @@ def run_reranker_evaluation(
     # 설정 로드
     config = get_report_config(report_type)
 
-    # 프롬프트 로드 (common_utils 사용)
-    from utils.common_utils import load_prompt as load_prompt_util
-
+    # 프롬프트 로드
     report_type_suffix = "weekly_report" if report_type == "weekly" else "executive_report"
-    system_prompt = load_prompt_util(f"prompts/templates/service/{report_type_suffix}/system_prompt.txt")
-    answer_generation_prompt = load_prompt_util(f"prompts/templates/service/{report_type_suffix}/answer_generation_prompt.txt")
+    system_prompt = load_prompt(f"prompts/templates/service/{report_type_suffix}/system_prompt.txt")
+    answer_generation_prompt = load_prompt(f"prompts/templates/service/{report_type_suffix}/answer_generation_prompt.txt")
 
     # 평가 데이터셋 로드
     eval_data = load_evaluation_dataset(dataset_path)

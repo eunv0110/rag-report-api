@@ -100,13 +100,13 @@ def collect_missing_pages(collector, existing_page_ids: Set[str], filepath: str,
     
     # 기존 데이터와 병합
     if os.path.exists(filepath):
-        from utils.file_utils import load_json, save_json
+        from utils.files import load_json, save_json
         existing_data = load_json(filepath)
         merged_data = existing_data + new_data
         save_json(merged_data, filepath)
         print(f"\n💾 병합 완료: {len(existing_data)} + {len(new_data)} = {len(merged_data)}개")
     else:
-        from utils.file_utils import save_json
+        from utils.files import save_json
         save_json(new_data, filepath)
         print(f"\n💾 새 파일 생성: {len(new_data)}개")
     
@@ -161,7 +161,7 @@ def update_changed_pages(collector, existing_data: List[Dict], filepath: str) ->
             updated_data.append(old_item)
     
     if update_count > 0:
-        from utils.file_utils import save_json
+        from utils.files import save_json
         save_json(updated_data, filepath)
         print(f"\n✅ {update_count}개 페이지 업데이트 완료")
     else:

@@ -17,8 +17,8 @@ from services.incremental_sync import (
     collect_missing_pages,
     update_changed_pages
 )
-from utils.file_utils import save_json, load_json
-from utils.langfuse_utils import get_langfuse_client, trace_operation
+from utils.files import save_json, load_json
+from utils.langfuse import get_langfuse_client, trace_operation
 from utils.embedding_cache import CachedEmbedder
 
 # LangChain imports

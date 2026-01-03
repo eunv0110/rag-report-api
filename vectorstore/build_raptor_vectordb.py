@@ -12,8 +12,8 @@ from models.vision.factory import get_vision_model
 from core.data_collector import NotionDataSourceCollector
 from core.chunker import process_page_data
 from retrievers.raptor_tree import RaptorTreeBuilder
-from utils.file_utils import save_json, load_json
-from utils.langfuse_utils import get_langfuse_client, trace_operation
+from utils.files import save_json, load_json
+from utils.langfuse import get_langfuse_client, trace_operation
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid

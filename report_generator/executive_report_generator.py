@@ -20,7 +20,7 @@ try:
 except ImportError:
     from report_generator.report_generator import ReportGenerator
 
-from utils.date_utils import parse_date_range
+from utils.dates import parse_date_range
 
 
 class ExecutiveReportGenerator(ReportGenerator):

@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env python3
 """통합 보고서 생성 CLI
 
@@ -26,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from report_generator.report_generator import ReportGenerator
 from report_generator.document_generator import DocumentGenerator
-from utils.date_utils import parse_date_range
+from utils.dates import parse_date_range
 
 
 def main():

@@ -18,6 +18,9 @@ def load_prompt(prompt_file: str) -> str:
 
     Returns:
         프롬프트 텍스트
+
+    Raises:
+        FileNotFoundError: 프롬프트 파일이 존재하지 않을 때
     """
     prompt_path = Path(__file__).parent.parent / prompt_file
     if not prompt_path.exists():
@@ -35,7 +38,15 @@ def load_evaluation_dataset(file_path: str) -> List[Dict[str, Any]]:
 
     Returns:
         평가 데이터 리스트
+
+    Raises:
+        FileNotFoundError: 파일이 존재하지 않을 때
+        json.JSONDecodeError: JSON 파싱 실패 시
     """
+    file_path_obj = Path(file_path)
+    if not file_path_obj.exists():
+        raise FileNotFoundError(f"데이터셋 파일을 찾을 수 없습니다: {file_path}")
+
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
@@ -209,12 +220,19 @@ def add_retrieval_quality_score(langfuse, trace_id: str, context_metadata: List[
         )
 
 
-def save_embedding_cache():
-    """임베딩 캐시 저장"""
+def save_embedding_cache() -> bool:
+    """임베딩 캐시 저장
+
+    Returns:
+        캐시 저장 성공 여부
+    """
     try:
         from models.embeddings.factory import get_embedder
         embedder = get_embedder()
         if hasattr(embedder, 'use_cache') and embedder.use_cache and embedder.cache:
             embedder.cache.save()
-    except:
-        pass  # 캐시 저장 실패는 무시
+            return True
+        return False
+    except Exception as e:
+        print(f"⚠️ 임베딩 캐시 저장 실패: {e}")
+        return False

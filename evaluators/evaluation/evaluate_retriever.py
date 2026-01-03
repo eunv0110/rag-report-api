@@ -34,8 +34,8 @@ from datetime import datetime
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from utils.langfuse_utils import get_langfuse_client
-from utils.common_utils import (
+from utils.langfuse import get_langfuse_client
+from utils.common import (
     load_prompt,
     load_evaluation_dataset,
     generate_llm_answer,
@@ -139,7 +139,7 @@ def evaluate_single_query(
         "retriever_type": retriever_config['retriever_type']
     }
 
-    from utils.common_utils import create_trace_and_generation as create_trace
+    from utils.common import create_trace_and_generation as create_trace
     trace_id = create_trace(
         langfuse=langfuse,
         retriever_name=retriever_name,

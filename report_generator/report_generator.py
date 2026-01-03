@@ -2,8 +2,10 @@
 """통합 보고서 생성기
 
 설정 파일을 통해 다양한 타입의 보고서를 생성할 수 있습니다:
-- Weekly Report: weekly_report_config.yaml
-- Executive Report: executive_report_config.yaml
+- Weekly Report
+- Executive Report
+
+설정 파일: config/report_config.yaml
 """
 
 import sys
@@ -29,11 +31,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # 환경 변수 로드
 load_dotenv()
 
-from config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT
-from utils.langfuse_utils import get_langfuse_client
-from utils.date_utils import parse_date_range, extract_date_filter_from_question
+from config.settings import (
+    AZURE_AI_CREDENTIAL,
+    AZURE_AI_ENDPOINT,
+    QDRANT_DATA_DIR,
+    PROMPTS_BASE_DIR
+)
+from utils.langfuse import get_langfuse_client
+from utils.dates import parse_date_range, extract_date_filter_from_question
+from utils.common import load_prompt
 from retrievers.ensemble_retriever import get_ensemble_retriever
 from retrievers.multiquery_retriever import get_multiquery_retriever
+from rerankers import rerank_documents
 
 
 class ReportGenerator:
@@ -45,20 +54,26 @@ class ReportGenerator:
     def __init__(self, config_path: Optional[str] = None, report_type: Optional[str] = None):
         """
         Args:
-            config_path: 설정 파일 경로. 지정하지 않으면 report_type에 따라 기본 경로 사용.
-            report_type: 보고서 타입 ("weekly", "executive"). config_path가 없을 때만 사용.
+            config_path: 설정 파일 경로. 지정하지 않으면 기본 report_config.yaml 사용.
+            report_type: 보고서 타입 ("weekly", "executive"). 설정 파일 내에서 해당 섹션 선택.
         """
         # 설정 파일 로드
         if config_path is None:
-            if report_type == "weekly":
-                config_path = Path(__file__).parent.parent / "config" / "weekly_report_config.yaml"
-            elif report_type == "executive":
-                config_path = Path(__file__).parent.parent / "config" / "executive_report_config.yaml"
-            else:
-                raise ValueError("config_path 또는 report_type ('weekly' 또는 'executive') 중 하나를 지정해야 합니다.")
+            config_path = Path(__file__).parent.parent / "config" / "report_config.yaml"
 
         with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
+            full_config = yaml.safe_load(f)
+
+        # report_type에 따라 해당 섹션 선택
+        if report_type is None:
+            raise ValueError("report_type ('weekly' 또는 'executive')을 지정해야 합니다.")
+
+        if report_type == "weekly":
+            config = full_config['weekly_report']
+        elif report_type == "executive":
+            config = full_config['executive_report']
+        else:
+            raise ValueError(f"Unknown report_type: {report_type}. Use 'weekly' or 'executive'.")
 
         # 설정 적용
         self.report_type = config['report_type']
@@ -68,13 +83,18 @@ class ReportGenerator:
         self.default_questions = config.get('default_questions', [])
 
         self.langfuse = get_langfuse_client()
-        self.qdrant_lock = self.paths['qdrant_lock']
 
-    def load_prompt(self, prompt_file: str) -> str:
-        """프롬프트 파일 로드"""
-        prompt_path = Path(__file__).parent.parent / self.paths['prompts_base'] / prompt_file
-        with open(prompt_path, 'r', encoding='utf-8') as f:
-            return f.read()
+        # 경로를 환경변수 기반으로 구성
+        qdrant_lock_subdir = self.paths.get('qdrant_lock_subdir', '')
+        self.qdrant_lock = str(Path(QDRANT_DATA_DIR) / qdrant_lock_subdir / '.lock')
+
+        prompts_base_subpath = self.paths.get('prompts_base', '')
+        self.prompts_base = str(Path(PROMPTS_BASE_DIR) / prompts_base_subpath)
+
+    def _load_prompt(self, prompt_file: str) -> str:
+        """프롬프트 파일 로드 (내부 헬퍼 메서드)"""
+        prompt_path = f"{self.prompts_base}/{prompt_file}"
+        return load_prompt(prompt_path)
 
     def _extract_title_from_answer(self, answer: str) -> str:
         """답변에서 제목 추출 ([TITLE]...[/TITLE] 태그 사용)"""
@@ -88,7 +108,10 @@ class ReportGenerator:
         return re.sub(r'\[TITLE\].*?\[/TITLE\]\s*', '', answer, flags=re.DOTALL).strip()
 
     def retrieve_documents(self, question: str, date_filter: Optional[tuple] = None) -> List[Any]:
-        """문서 검색 - 설정에 따라 RRF Ensemble 또는 RRF MultiQuery 사용"""
+        """문서 검색 - 설정에 따라 RRF Ensemble 또는 RRF MultiQuery 사용
+
+        Reranker가 활성화된 경우, 더 많은 문서를 검색한 후 재순위화합니다.
+        """
         # Qdrant 락 파일 정리
         if os.path.exists(self.qdrant_lock):
             try:
@@ -104,10 +127,20 @@ class ReportGenerator:
         os.environ["MODEL_PRESET"] = self.retriever_config['embedding']
         os.environ["USE_EMBEDDING_CACHE"] = "true"
 
+        # Reranker 설정 확인
+        use_reranker = self.retriever_config.get('use_reranker', False)
+        final_top_k = self.retriever_config['top_k']
+
+        # Reranker를 사용하는 경우 초기 검색 문서 수를 늘림
+        if use_reranker:
+            initial_k = max(20, final_top_k * 3)
+        else:
+            initial_k = final_top_k
+
         # 기본 RRF Ensemble 리트리버 생성
         rrf_config = self.retriever_config.get('rrf', {})
         base_retriever = get_ensemble_retriever(
-            k=self.retriever_config['top_k'],
+            k=initial_k,
             bm25_weight=rrf_config.get('bm25_weight', 0.5),
             dense_weight=rrf_config.get('dense_weight', 0.5),
             date_filter=date_filter,
@@ -131,7 +164,25 @@ class ReportGenerator:
         # 문서 검색
         docs = retriever.invoke(question)
 
-        print(f"📄 검색된 문서 수: {len(docs)}")
+        if use_reranker:
+            print(f"📄 초기 검색된 문서 수: {len(docs)}")
+
+            # Reranker로 재순위화
+            reranker_config = self.retriever_config.get('reranker', {})
+            batch_size = reranker_config.get('batch_size', None)
+
+            docs = rerank_documents(
+                query=question,
+                docs=docs,
+                top_k=final_top_k,
+                batch_size=batch_size,
+                initial_k=len(docs)
+            )
+
+            print(f"📄 최종 문서 수: {len(docs)}")
+        else:
+            print(f"📄 검색된 문서 수: {len(docs)}")
+
         for i, doc in enumerate(docs, 1):
             print(f"  {i}. {doc.metadata.get('page_title', 'Unknown')}")
 
@@ -149,8 +200,8 @@ class ReportGenerator:
         context_text = "\n".join(context_parts)
 
         # 프롬프트 로드
-        system_prompt = self.load_prompt("system_prompt.txt")
-        answer_generation_template = self.load_prompt("answer_generation_prompt.txt")
+        system_prompt = self._load_prompt("system_prompt.txt")
+        answer_generation_template = self._load_prompt("answer_generation_prompt.txt")
 
         # 템플릿에 변수 대입
         user_prompt = answer_generation_template.replace("{context}", context_text).replace("{question}", question)
