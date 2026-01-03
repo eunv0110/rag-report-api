@@ -26,9 +26,9 @@ from datetime import datetime
 # 프로젝트 루트를 sys.path에 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from report_generator.report_generator import ReportGenerator
-from report_generator.document_generator import DocumentGenerator
-from utils.dates import parse_date_range
+from app.scripts.report_generator import ReportGenerator
+from app.scripts.document_generator import DocumentGenerator
+from app.utils.dates import parse_date_range
 
 
 def main():
