@@ -54,8 +54,8 @@ DEFAULT_TOP_K = 10
 
 def load_evaluation_config() -> Dict[str, Any]:
     """평가 설정 파일 로드"""
-    # 프로젝트 루트의 config 디렉토리에서 설정 파일 로드
-    config_path = Path(__file__).parent.parent.parent / "config" / "evaluation_config.yaml"
+    # experiments 디렉토리의 evaluation_config.yaml 파일 로드
+    config_path = Path(__file__).parent.parent.parent / "evaluation_config.yaml"
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 

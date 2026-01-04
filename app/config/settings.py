@@ -43,7 +43,7 @@ def load_model_config() -> dict:
 
         # 선택된 프리셋을 embeddings로 설정
         config["embeddings"] = config["embedding_presets"][preset_name]
-        print(f"✅ Using embedding preset: {preset_name}")
+        # print(f"✅ Using embedding preset: {preset_name}")
 
     return config
 
@@ -51,7 +51,8 @@ def load_model_config() -> dict:
 # 전역 설정 로드
 # ============================================================================
 MODEL_CONFIG = load_model_config()
-EVALUATION_CONFIG = load_yaml_config("evaluation_config")
+# EVALUATION_CONFIG는 experiments/ 디렉토리에서 직접 로드하도록 변경됨
+# EVALUATION_CONFIG = load_yaml_config("evaluation_config")
 REPORT_CONFIG = load_yaml_config("report_config")
 
 # ============================================================================

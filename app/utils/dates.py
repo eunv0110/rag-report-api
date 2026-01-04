@@ -186,10 +186,17 @@ def get_week_of_month(month: int, week_num: int, year: Optional[int] = None) -> 
     Args:
         month: 월 (1-12)
         week_num: 주차 (1-5)
-        year: 연도 (None이면 현재 연도)
+        year: 연도 (None이면 자동 추론)
     """
     if year is None:
-        year = datetime.now().year
+        # 연도 자동 추론: 현재 월보다 미래 월이면 작년으로 간주
+        current_date = datetime.now()
+        if month > current_date.month:
+            # 미래 월 → 작년
+            year = current_date.year - 1
+        else:
+            # 과거 또는 현재 월 → 올해
+            year = current_date.year
 
     # 해당 월의 첫째 날
     first_day = datetime(year, month, 1)
@@ -232,37 +239,72 @@ def extract_date_filter_from_question(question: str) -> Optional[Tuple[str, str]
         >>> extract_date_filter_from_question("이번 주 일정 알려줘")
         ('2025-12-23T00:00:00.000Z', '2025-12-29T23:59:59.999Z')
     """
+    # 연도 추출 (질문에 "YYYY년" 패턴이 있으면 우선 사용)
+    year_match = re.search(r'(\d{4})\s*년', question)
+    year = int(year_match.group(1)) if year_match else None
+
     # 날짜 관련 패턴 정의 (우선순위 순서대로)
     patterns = [
+        # "YYYY년 N월 N주차" 패턴 (연도 포함)
+        (r'(\d{4})\s*년\s*(\d{1,2})월\s*(\d{1})주차', lambda m: (f"{m.group(2)}월 {m.group(3)}주차", int(m.group(1)))),
+        # "YYYY년 N월 첫째주/둘째주/..." 패턴 (연도 포함)
+        (r'(\d{4})\s*년\s*(\d{1,2})월\s*(첫째주|둘째주|셋째주|넷째주|다섯째주)', lambda m: (f"{m.group(2)}월 {m.group(3)}", int(m.group(1)))),
         # "N월 N주차" 패턴
-        (r'(\d{1,2})월\s*(\d{1})주차', lambda m: f"{m.group(1)}월 {m.group(2)}주차"),
+        (r'(\d{1,2})월\s*(\d{1})주차', lambda m: (f"{m.group(1)}월 {m.group(2)}주차", year)),
         # "N월 첫째주/둘째주/셋째주/넷째주" 패턴
-        (r'(\d{1,2})월\s*(첫째주|둘째주|셋째주|넷째주|다섯째주)', lambda m: f"{m.group(1)}월 {m.group(2)}"),
+        (r'(\d{1,2})월\s*(첫째주|둘째주|셋째주|넷째주|다섯째주)', lambda m: (f"{m.group(1)}월 {m.group(2)}", year)),
         # "N월" 패턴
-        (r'(\d{1,2})월', lambda m: f"{m.group(1)}월"),
+        (r'(\d{1,2})월', lambda m: (f"{m.group(1)}월", year)),
         # "이번 주/이번주" 패턴
-        (r'이번\s*주', lambda m: "이번 주"),
+        (r'이번\s*주', lambda m: ("이번 주", None)),
         # "이번 달/이번달" 패턴
-        (r'이번\s*달', lambda m: "이번 달"),
+        (r'이번\s*달', lambda m: ("이번 달", None)),
         # "지난 주/지난주" 패턴
-        (r'지난\s*주', lambda m: "지난 주"),
+        (r'지난\s*주', lambda m: ("지난 주", None)),
         # "지난 달/지난달" 패턴
-        (r'지난\s*달', lambda m: "지난 달"),
+        (r'지난\s*달', lambda m: ("지난 달", None)),
         # "최근 N주/N주간" 패턴
-        (r'최근\s*(\d{1,2})\s*주', lambda m: f"최근 {m.group(1)}주"),
-        (r'(\d{1,2})\s*주간', lambda m: f"최근 {m.group(1)}주"),
+        (r'최근\s*(\d{1,2})\s*주', lambda m: (f"최근 {m.group(1)}주", None)),
+        (r'(\d{1,2})\s*주간', lambda m: (f"최근 {m.group(1)}주", None)),
     ]
 
     # 각 패턴을 순서대로 확인
     for pattern, formatter in patterns:
         match = re.search(pattern, question)
         if match:
-            date_str = formatter(match)
+            result = formatter(match)
+
+            # 결과가 튜플인지 확인 (date_str, explicit_year)
+            if isinstance(result, tuple):
+                date_str, explicit_year = result
+            else:
+                date_str, explicit_year = result, None
+
             try:
-                # parse_date_range를 사용해 날짜 범위로 변환
-                date_range = parse_date_range(date_input=date_str)
-                if date_range:
-                    return date_range
+                # "N월 N주차" 또는 "N월 첫째주" 패턴의 경우 연도를 명시적으로 전달
+                if "주차" in date_str or any(week in date_str for week in ["첫째주", "둘째주", "셋째주", "넷째주", "다섯째주"]):
+                    # 월과 주차 정보 추출
+                    month_match = re.search(r'(\d{1,2})월', date_str)
+                    week_match = re.search(r'(\d{1})주차', date_str) or re.search(r'(첫째|둘째|셋째|넷째|다섯째)주', date_str)
+
+                    if month_match and week_match:
+                        month = int(month_match.group(1))
+                        week_str = week_match.group(1)
+
+                        # 주차를 숫자로 변환
+                        week_map = {"첫째": 1, "둘째": 2, "셋째": 3, "넷째": 4, "다섯째": 5}
+                        week_num = week_map.get(week_str, int(week_str) if week_str.isdigit() else 1)
+
+                        # 연도 결정: 명시적 연도 > 질문에서 추출한 연도 > 자동 추론
+                        target_year = explicit_year if explicit_year else year
+                        date_range = get_week_of_month(month, week_num, target_year)
+                        if date_range:
+                            return date_range
+                else:
+                    # 다른 패턴은 parse_date_range 사용
+                    date_range = parse_date_range(date_input=date_str)
+                    if date_range:
+                        return date_range
             except Exception as e:
                 print(f"⚠️ 날짜 파싱 실패 ('{date_str}'): {e}")
                 continue

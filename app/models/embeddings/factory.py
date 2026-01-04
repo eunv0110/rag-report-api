@@ -33,7 +33,7 @@ def get_embedder(config_path: str = None) -> Embeddings:
         if preset_name not in config['embedding_presets']:
             raise ValueError(f"Unknown preset: {preset_name}. Available: {list(config['embedding_presets'].keys())}")
         emb_config = config['embedding_presets'][preset_name]
-        print(f"✅ Using embedding preset: {preset_name}")
+        # print(f"✅ Using embedding preset: {preset_name}")
     else:
         # 레거시 형식 지원 (embeddings 키가 직접 있는 경우)
         emb_config = config['embeddings']

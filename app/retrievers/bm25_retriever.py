@@ -163,9 +163,10 @@ def get_bm25_retriever(k: int = 5, date_filter: tuple = None, preset: str = None
     # 문서가 없는 경우 처리
     if not documents:
         print(f"⚠️ 날짜 필터({date_filter})에 해당하는 문서가 없습니다.")
-        # 빈 retriever 반환 (최소 1개의 더미 문서 필요)
+        # 빈 retriever 반환 (최소 1개의 실제 텍스트가 있는 더미 문서 필요)
+        # BM25는 빈 문자열을 처리하지 못하므로 최소한의 텍스트 추가
         from langchain_core.documents import Document
-        documents = [Document(page_content="", metadata={})]
+        documents = [Document(page_content="no documents found", metadata={})]
 
     # BM25 Retriever 생성
     retriever = BM25Retriever.from_documents(documents)

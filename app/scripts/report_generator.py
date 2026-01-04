@@ -164,6 +164,14 @@ class ReportGenerator:
         # 문서 검색
         docs = retriever.invoke(question)
 
+        # 더미 문서 필터링 (날짜 필터에 해당하는 문서가 없을 때 생성된 더미 제거)
+        docs = [doc for doc in docs if doc.page_content != "no documents found"]
+
+        # 문서가 없으면 빈 리스트 반환
+        if not docs:
+            print(f"⚠️ 검색된 문서가 없습니다.")
+            return []
+
         if use_reranker:
             print(f"📄 초기 검색된 문서 수: {len(docs)}")
 
@@ -301,12 +309,17 @@ class ReportGenerator:
                 # 문서 검색
                 docs = self.retrieve_documents(question, date_filter)
 
-                # 답변 생성 (Langfuse 자동 추적)
-                answer = self.generate_answer(question, docs)
+                # 문서가 없는 경우 처리
+                if not docs:
+                    answer = "해당 기간에 대한 문서를 찾을 수 없습니다."
+                    title = "문서 없음"
+                else:
+                    # 답변 생성 (Langfuse 자동 추적)
+                    answer = self.generate_answer(question, docs)
 
-                # 제목 추출
-                title = self._extract_title_from_answer(answer)
-                answer = self._remove_title_tag_from_answer(answer)
+                    # 제목 추출
+                    title = self._extract_title_from_answer(answer)
+                    answer = self._remove_title_tag_from_answer(answer)
 
                 if title:
                     print(f"📋 제목: {title}")

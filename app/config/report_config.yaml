@@ -22,7 +22,7 @@ weekly_report:
 
     # Reranker 설정
     reranker:
-      batch_size: 16
+      batch_size: 20  # GPU 메모리 여유 있음 (38GB free) → 속도 향상
 
   # LLM 설정
   llm:

@@ -14,13 +14,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import json
+import yaml
 from datetime import datetime
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config.settings import EVALUATION_CONFIG
 from utils.langfuse import get_langfuse_client
 from utils.common import save_embedding_cache
+
+# Load evaluation config from experiments directory
+def load_evaluation_config():
+    """experiments 디렉토리의 evaluation_config.yaml 파일 로드"""
+    config_path = Path(__file__).parent.parent.parent / "evaluation_config.yaml"
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+EVALUATION_CONFIG = load_evaluation_config()
 
 # Reranker 테스트 스크립트에서 함수 재사용
 from evaluators.evaluation.evaluate_reranker import (
