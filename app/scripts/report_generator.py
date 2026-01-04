@@ -107,6 +107,16 @@ class ReportGenerator:
         """답변에서 제목 태그 제거"""
         return re.sub(r'\[TITLE\].*?\[/TITLE\]\s*', '', answer, flags=re.DOTALL).strip()
 
+    def _remove_horizontal_lines(self, answer: str) -> str:
+        """답변에서 마크다운 수평선(---) 및 불필요한 종료 태그 제거"""
+        # 수평선 제거
+        answer = re.sub(r'\n---\n', '\n', answer)
+        # [END OF REPORT] 등 종료 태그 제거
+        answer = re.sub(r'\n?\[END OF REPORT\]\s*$', '', answer, flags=re.IGNORECASE)
+        # (끝), **(끝)** 등 종료 표시 제거
+        answer = re.sub(r'\n?\*?\*?\(끝\)\*?\*?\s*$', '', answer)
+        return answer.strip()
+
     def retrieve_documents(self, question: str, date_filter: Optional[tuple] = None) -> List[Any]:
         """문서 검색 - 설정에 따라 RRF Ensemble 또는 RRF MultiQuery 사용
 
@@ -320,6 +330,7 @@ class ReportGenerator:
                     # 제목 추출
                     title = self._extract_title_from_answer(answer)
                     answer = self._remove_title_tag_from_answer(answer)
+                    answer = self._remove_horizontal_lines(answer)
 
                 if title:
                     print(f"📋 제목: {title}")
