@@ -1,0 +1,37 @@
+[Unit]
+Description=RAG Report Generator API Service
+After=network.target
+
+[Service]
+Type=notify
+User=work
+Group=work
+WorkingDirectory=/home/work/rag/Project/rag-report-generator
+
+# Environment
+Environment="PATH=/home/work/rag/Project/rag-report-generator/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/home/work/rag/Project/rag-report-generator/.env
+
+# Gunicorn command with logging
+ExecStart=/usr/local/bin/gunicorn app.api.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8080 \
+    --access-logfile /home/work/rag/Project/rag-report-generator/logs/access.log \
+    --error-logfile /home/work/rag/Project/rag-report-generator/logs/error.log \
+    --log-level info \
+    --timeout 120 \
+    --graceful-timeout 30
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Security and resource limits
+LimitNOFILE=65535
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
