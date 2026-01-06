@@ -1,5 +1,5 @@
 [Unit]
-Description=RAG Report Generator API Service
+Description=RAG Report Generator API
 After=network.target
 
 [Service]
@@ -7,31 +7,27 @@ Type=notify
 User=work
 Group=work
 WorkingDirectory=/home/work/rag/Project/rag-report-generator
-
-# Environment
 Environment="PATH=/home/work/rag/Project/rag-report-generator/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=/home/work/rag/Project/rag-report-generator/.env
 
-# Gunicorn command with logging
-ExecStart=/usr/local/bin/gunicorn app.api.main:app \
-    --workers 4 \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --bind 0.0.0.0:8080 \
-    --access-logfile /home/work/rag/Project/rag-report-generator/logs/access.log \
-    --error-logfile /home/work/rag/Project/rag-report-generator/logs/error.log \
-    --log-level info \
-    --timeout 120 \
-    --graceful-timeout 30
+ExecStart=/home/work/rag/Project/rag-report-generator/.venv/bin/gunicorn \
+    --config /home/work/rag/Project/rag-report-generator/gunicorn.conf.py \
+    app.api.main:app
 
-# Restart policy
+# 재시작 정책
 Restart=always
-RestartSec=5
-StartLimitInterval=200
+RestartSec=10
 StartLimitBurst=5
+StartLimitInterval=60
 
-# Security and resource limits
-LimitNOFILE=65535
+# 보안 설정
+NoNewPrivileges=true
 PrivateTmp=true
+
+# 로깅
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rag-api
 
 [Install]
 WantedBy=multi-user.target

@@ -7,22 +7,21 @@ from datetime import datetime
 class ReportRequest(BaseModel):
     """보고서 생성 요청"""
     report_type: str = Field(..., description="보고서 타입 (weekly 또는 executive)")
-    questions: Optional[List[str]] = Field(None, description="질문 리스트 (미지정 시 기본 질문 사용)")
+    question: Optional[str] = Field(None, description="질문 (미지정 시 기본 질문 사용)")
     date_range: Optional[str] = Field(None, description="날짜 범위 (예: '이번 주', '12월 2주차')")
     start_date: Optional[str] = Field(None, description="시작 날짜 (YYYY-MM-DD)")
     end_date: Optional[str] = Field(None, description="종료 날짜 (YYYY-MM-DD)")
     author: Optional[str] = Field(None, description="보고서 작성자")
+    output_format: Optional[str] = Field("json", description="출력 형식 (json, pdf, docx)")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "report_type": "weekly",
-                "questions": [
-                    "이번 주 주요 성과는 무엇인가요?",
-                    "현재 진행 중인 업무는 무엇인가요?"
-                ],
+                "question": "이번 주 주요 성과와 진행 중인 업무는 무엇인가요?",
                 "date_range": "이번 주",
-                "author": "김은비"
+                "author": "김은비",
+                "output_format": "pdf"
             }
         }
 
