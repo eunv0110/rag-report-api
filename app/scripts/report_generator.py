@@ -42,7 +42,7 @@ from app.utils.dates import parse_date_range, extract_date_filter_from_question
 from app.utils.common import load_prompt
 from app.retrievers.ensemble_retriever import get_ensemble_retriever
 from app.retrievers.multiquery_retriever import get_multiquery_retriever
-from app.rerankers import rerank_documents
+# from app.rerankers import rerank_documents
 
 
 class ReportGenerator:
@@ -137,15 +137,17 @@ class ReportGenerator:
         os.environ["MODEL_PRESET"] = self.retriever_config['embedding']
         os.environ["USE_EMBEDDING_CACHE"] = "true"
 
-        # Reranker 설정 확인
-        use_reranker = self.retriever_config.get('use_reranker', False)
+        # Reranker 설정 확인 (주석처리)
+        # use_reranker = self.retriever_config.get('use_reranker', False)
+        use_reranker = False  # Reranker 비활성화
         final_top_k = self.retriever_config['top_k']
 
-        # Reranker를 사용하는 경우 초기 검색 문서 수를 늘림
-        if use_reranker:
-            initial_k = max(20, final_top_k * 3)
-        else:
-            initial_k = final_top_k
+        # Reranker를 사용하는 경우 초기 검색 문서 수를 늘림 (주석처리)
+        # if use_reranker:
+        #     initial_k = max(20, final_top_k * 3)
+        # else:
+        #     initial_k = final_top_k
+        initial_k = final_top_k  # Reranker 비활성화로 final_top_k 사용
 
         # 기본 RRF Ensemble 리트리버 생성
         rrf_config = self.retriever_config.get('rrf', {})
@@ -182,24 +184,27 @@ class ReportGenerator:
             print(f"⚠️ 검색된 문서가 없습니다.")
             return []
 
-        if use_reranker:
-            print(f"📄 초기 검색된 문서 수: {len(docs)}")
+        # Reranker 사용 로직 주석처리
+        # if use_reranker:
+        #     print(f"📄 초기 검색된 문서 수: {len(docs)}")
+        #
+        #     # Reranker로 재순위화
+        #     reranker_config = self.retriever_config.get('reranker', {})
+        #     batch_size = reranker_config.get('batch_size', None)
+        #
+        #     docs = rerank_documents(
+        #         query=question,
+        #         docs=docs,
+        #         top_k=final_top_k,
+        #         batch_size=batch_size,
+        #         initial_k=len(docs)
+        #     )
+        #
+        #     print(f"📄 최종 문서 수: {len(docs)}")
+        # else:
+        #     print(f"📄 검색된 문서 수: {len(docs)}")
 
-            # Reranker로 재순위화
-            reranker_config = self.retriever_config.get('reranker', {})
-            batch_size = reranker_config.get('batch_size', None)
-
-            docs = rerank_documents(
-                query=question,
-                docs=docs,
-                top_k=final_top_k,
-                batch_size=batch_size,
-                initial_k=len(docs)
-            )
-
-            print(f"📄 최종 문서 수: {len(docs)}")
-        else:
-            print(f"📄 검색된 문서 수: {len(docs)}")
+        print(f"📄 검색된 문서 수: {len(docs)}")  # Reranker 비활성화
 
         for i, doc in enumerate(docs, 1):
             print(f"  {i}. {doc.metadata.get('page_title', 'Unknown')}")

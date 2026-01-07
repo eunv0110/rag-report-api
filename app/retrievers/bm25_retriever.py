@@ -13,6 +13,7 @@ from qdrant_client import QdrantClient
 from app.config.settings import (
     QDRANT_COLLECTION,
     QDRANT_URL,
+    QDRANT_API_KEY,
     QDRANT_USE_SERVER,
     get_qdrant_path,
     get_collection_name
@@ -39,7 +40,11 @@ def load_documents_from_qdrant(date_filter: tuple = None, preset: str = None) ->
     if QDRANT_USE_SERVER:
         # 캐시 키에 컬렉션 이름 포함
         cache_key = (QDRANT_URL, collection_name, date_filter)
-        client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
+        client = QdrantClient(
+            url=QDRANT_URL,
+            api_key=QDRANT_API_KEY,
+            check_compatibility=False
+        )
     else:
         # 레거시: 로컬 파일 모드
         qdrant_path = get_qdrant_path()

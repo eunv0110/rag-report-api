@@ -13,6 +13,7 @@ from qdrant_client.models import Filter, FieldCondition, Range, MatchValue
 from app.config.settings import (
     QDRANT_COLLECTION,
     QDRANT_URL,
+    QDRANT_API_KEY,
     QDRANT_USE_SERVER,
     get_qdrant_path,
     get_collection_name
@@ -99,7 +100,11 @@ def get_dense_retriever(
         if use_singleton and cache_key in _qdrant_client_cache:
             client = _qdrant_client_cache[cache_key]
         else:
-            client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
+            client = QdrantClient(
+                url=QDRANT_URL,
+                api_key=QDRANT_API_KEY,
+                check_compatibility=False
+            )
             if use_singleton:
                 _qdrant_client_cache[cache_key] = client
     else:

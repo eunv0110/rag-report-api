@@ -201,7 +201,7 @@ class DocumentGenerator:
         para = doc.add_paragraph()
         run = para.add_run(text)
         run.font.size = Pt(11)
-        run.font.name = 'Malgun Gothic'
+        run.font.name = 'NanumGothic'
 
         if bold:
             run.bold = True
@@ -296,12 +296,12 @@ class DocumentGenerator:
                             for run in paragraph.runs:
                                 run.bold = True
                                 run.font.size = Pt(10)
-                                run.font.name = 'Malgun Gothic'
+                                run.font.name = 'NanumGothic'
                     else:
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
                                 run.font.size = Pt(9)
-                                run.font.name = 'Malgun Gothic'
+                                run.font.name = 'NanumGothic'
 
         doc.add_paragraph()  # 테이블 뒤 간격
 
@@ -424,7 +424,7 @@ class DocumentGenerator:
             if match.start() > last_pos:
                 run = paragraph.add_run(text[last_pos:match.start()])
                 run.font.size = Pt(11)
-                run.font.name = 'Malgun Gothic'
+                run.font.name = 'NanumGothic'
 
             # 형식화된 텍스트 추가
             marker = match.group(1)
@@ -432,7 +432,7 @@ class DocumentGenerator:
 
             run = paragraph.add_run(content)
             run.font.size = Pt(11)
-            run.font.name = 'Malgun Gothic'
+            run.font.name = 'NanumGothic'
 
             if marker in ['***', '___']:
                 run.bold = True
@@ -448,7 +448,7 @@ class DocumentGenerator:
         if last_pos < len(text):
             run = paragraph.add_run(text[last_pos:])
             run.font.size = Pt(11)
-            run.font.name = 'Malgun Gothic'
+            run.font.name = 'NanumGothic'
 
     def generate_word_report(self, report_data: Dict[str, Any], output_path: str):
         """Word 보고서 생성
@@ -908,7 +908,7 @@ class DocumentGenerator:
             title_run = title_para.add_run(header_data.get('title', ''))
             title_run.font.size = Pt(18)
             title_run.font.bold = True
-            title_run.font.name = 'Malgun Gothic'
+            title_run.font.name = 'NanumGothic'
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
             # 작성자 단락 생성 (우측 정렬)
@@ -916,7 +916,7 @@ class DocumentGenerator:
             author_text = f"작성자: {header_data.get('author', 'Unknown')}"
             author_run = author_para.add_run(author_text)
             author_run.font.size = Pt(10)
-            author_run.font.name = 'Malgun Gothic'
+            author_run.font.name = 'NanumGothic'
             author_run.font.color.rgb = RGBColor(100, 100, 100)
             author_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
@@ -925,7 +925,7 @@ class DocumentGenerator:
             date_text = f"작성일: {header_data.get('date', '')}"
             date_run = date_para.add_run(date_text)
             date_run.font.size = Pt(10)
-            date_run.font.name = 'Malgun Gothic'
+            date_run.font.name = 'NanumGothic'
             date_run.font.color.rgb = RGBColor(100, 100, 100)
             date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
@@ -947,7 +947,7 @@ class DocumentGenerator:
                 datefilter_text = f"수행 기간: {header_data.get('datefilter')}"
                 datefilter_run = datefilter_para.add_run(datefilter_text)
                 datefilter_run.font.size = Pt(10)
-                datefilter_run.font.name = 'Malgun Gothic'
+                datefilter_run.font.name = 'NanumGothic'
                 datefilter_run.font.color.rgb = RGBColor(100, 100, 100)
                 datefilter_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
@@ -1090,12 +1090,12 @@ class DocumentGenerator:
                                 for run in cell_para.runs:
                                     run.bold = True
                                     run.font.size = Pt(10)
-                                    run.font.name = 'Malgun Gothic'
+                                    run.font.name = 'NanumGothic'
                         else:
                             for cell_para in cell.paragraphs:
                                 for run in cell_para.runs:
                                     run.font.size = Pt(9)
-                                    run.font.name = 'Malgun Gothic'
+                                    run.font.name = 'NanumGothic'
 
             # Placeholder 단락 삭제
             p_element.getparent().remove(p_element)
@@ -1196,12 +1196,12 @@ class DocumentGenerator:
                                 for run in paragraph.runs:
                                     run.bold = True
                                     run.font.size = Pt(10)
-                                    run.font.name = 'Malgun Gothic'
+                                    run.font.name = 'NanumGothic'
                         else:
                             for paragraph in cell.paragraphs:
                                 for run in paragraph.runs:
                                     run.font.size = Pt(9)
-                                    run.font.name = 'Malgun Gothic'
+                                    run.font.name = 'NanumGothic'
 
             # 테이블에 해당하는 텍스트 단락들 삭제
             for para in paragraphs:
@@ -1294,7 +1294,7 @@ class DocumentGenerator:
             author_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             author_run = author_para.add_run(f"작성자: {author}")
             author_run.font.size = Pt(10)
-            author_run.font.name = 'Malgun Gothic'
+            author_run.font.name = 'NanumGothic'
             author_run.font.color.rgb = RGBColor(100, 100, 100)
 
             # 작성일 단락 (우측 정렬)
@@ -1302,7 +1302,7 @@ class DocumentGenerator:
             date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             date_run = date_para.add_run(f"작성일: {created_date}")
             date_run.font.size = Pt(10)
-            date_run.font.name = 'Malgun Gothic'
+            date_run.font.name = 'NanumGothic'
             date_run.font.color.rgb = RGBColor(100, 100, 100)
 
             # 날짜 필터 정보 추가 (수행날짜)
@@ -1312,7 +1312,7 @@ class DocumentGenerator:
                 datefilter_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                 datefilter_run = datefilter_para.add_run(f"보고 기간: {date_filter}")
                 datefilter_run.font.size = Pt(10)
-                datefilter_run.font.name = 'Malgun Gothic'
+                datefilter_run.font.name = 'NanumGothic'
                 datefilter_run.font.color.rgb = RGBColor(100, 100, 100)
 
             # 제목 뒤 간격

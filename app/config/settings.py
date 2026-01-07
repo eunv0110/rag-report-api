@@ -87,6 +87,7 @@ IMAGE_CONTEXT_CHARS = 300
 # Qdrant 설정
 # ============================================================================
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_USE_SERVER = os.getenv("QDRANT_USE_SERVER", "true").lower() == "true"
 
 # 프리셋별 컬렉션 매핑

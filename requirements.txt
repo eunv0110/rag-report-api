@@ -150,6 +150,8 @@ python-multipart==0.0.20
 gunicorn==23.0.0
 notion-client==2.7.0
 langchain-qdrant==1.1.0
+langchain-azure-ai
 #sentence-transformers==2.7.0
 python-docx==1.2.0
+pypandoc==1.13
 #torch==2.5.1
