@@ -98,13 +98,18 @@ echo ""
 echo "🔍 서비스 상태 확인 중..."
 docker compose ps
 
-# Qdrant 헬스체크
-echo ""
-echo "🔍 Qdrant 헬스체크..."
-if curl -s -f http://localhost:6333/health > /dev/null; then
-    success "Qdrant 정상 작동"
+# Qdrant 헬스체크 (로컬 Qdrant 사용 시)
+if docker compose ps | grep -q qdrant; then
+    echo ""
+    echo "🔍 Qdrant 헬스체크..."
+    if curl -s -f http://localhost:6333/health > /dev/null; then
+        success "Qdrant 정상 작동"
+    else
+        warning "Qdrant 헬스체크 실패. 로그를 확인하세요: docker compose logs qdrant"
+    fi
 else
-    warning "Qdrant 헬스체크 실패. 로그를 확인하세요: docker compose logs qdrant"
+    echo ""
+    echo "ℹ️  Qdrant Cloud를 사용 중입니다 (로컬 Qdrant 컨테이너 없음)"
 fi
 
 # API 헬스체크

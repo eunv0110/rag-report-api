@@ -54,3 +54,45 @@ def trace_operation(name: str, metadata: Optional[Dict[str, Any]] = None, user_i
     """
     # 트레이싱 비활성화 - 추후 활성화 예정
     yield None
+
+
+def save_feedback(trace_id: str, score: int, comment: Optional[str] = None, feedback_type: str = "user_satisfaction") -> bool:
+    """사용자 피드백을 Langfuse에 저장
+
+    Args:
+        trace_id: Langfuse Trace ID
+        score: 피드백 점수 (0-10)
+        comment: 피드백 코멘트 (선택)
+        feedback_type: 피드백 타입
+
+    Returns:
+        저장 성공 여부
+
+    Raises:
+        ValueError: Langfuse 클라이언트가 초기화되지 않은 경우
+    """
+    client = get_langfuse_client()
+
+    if client is None:
+        raise ValueError("Langfuse 클라이언트가 초기화되지 않았습니다. LANGFUSE_PUBLIC_KEY와 LANGFUSE_SECRET_KEY를 설정해주세요.")
+
+    try:
+        # 0-10 점수를 0-1로 정규화
+        normalized_score = score / 10.0
+
+        client.create_score(
+            trace_id=trace_id,
+            name=feedback_type,
+            value=normalized_score,
+            comment=comment
+        )
+
+        # 즉시 flush하여 서버에 전송
+        client.flush()
+
+        print(f"✅ 피드백 저장 완료 (trace_id: {trace_id}, score: {score}/10 -> {normalized_score})")
+        return True
+
+    except Exception as e:
+        print(f"❌ 피드백 저장 실패: {e}")
+        return False

@@ -30,6 +30,7 @@ weekly_report:
     display_name: "DeepSeek-V3.1"
     model_id: "azure_ai:DeepSeek-V3.1"
     description: "DeepSeek 최신 버전"
+    use_openrouter: true  # true로 설정하면 OpenRouter 사용 (deepseek/deepseek-chat-v3.1)
 
     generation:
       temperature: 0
@@ -75,6 +76,7 @@ executive_report:
     display_name: "GPT-4.1"
     model_id: "azure_ai:gpt-4.1"
     description: "OpenAI GPT-4.1"
+    use_openrouter: true  # true로 설정하면 OpenRouter 사용 (openai/gpt-4.1)
 
     generation:
       temperature: 0

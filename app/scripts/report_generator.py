@@ -163,10 +163,12 @@ class ReportGenerator:
         # MultiQuery 타입이면 래핑
         if self.retriever_config['type'] == 'rrf_multiquery':
             multiquery_config = self.retriever_config.get('multiquery', {})
+            use_openrouter = self.llm_config.get('use_openrouter', False)
             retriever = get_multiquery_retriever(
                 base_retriever=base_retriever,
                 num_queries=multiquery_config.get('num_queries', 3),
-                temperature=multiquery_config.get('temperature', 0.7)
+                temperature=multiquery_config.get('temperature', 0.7),
+                use_openrouter=use_openrouter
             )
         else:
             retriever = base_retriever
@@ -211,8 +213,14 @@ class ReportGenerator:
 
         return docs
 
-    def generate_answer(self, question: str, docs: List[Any]) -> str:
-        """LLM으로 답변 생성"""
+    def generate_answer(self, question: str, docs: List[Any]) -> tuple[str, str]:
+        """LLM으로 답변 생성
+
+        Returns:
+            tuple[str, str]: (답변, trace_id)
+        """
+        from app.utils.llm_factory import get_llm
+
         # Context 구성
         context_parts = []
         for doc in docs:
@@ -229,10 +237,6 @@ class ReportGenerator:
         # 템플릿에 변수 대입
         user_prompt = answer_generation_template.replace("{context}", context_text).replace("{question}", question)
 
-        # Azure AI 설정
-        os.environ['AZURE_AI_CREDENTIAL'] = AZURE_AI_CREDENTIAL
-        os.environ['AZURE_AI_ENDPOINT'] = AZURE_AI_ENDPOINT
-
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -242,22 +246,30 @@ class ReportGenerator:
 
         # LLM 생성
         generation_config = self.llm_config.get('generation', {})
-        model = init_chat_model(
-            self.llm_config['model_id'],
+        use_openrouter = self.llm_config.get('use_openrouter', False)
+
+        model = get_llm(
+            model_id=self.llm_config['model_id'],
             temperature=generation_config.get('temperature', 0),
-            max_completion_tokens=generation_config.get('max_completion_tokens', 1000)
+            max_tokens=generation_config.get('max_completion_tokens', 1000),
+            use_openrouter=use_openrouter,
+            model_name=self.llm_config['name']
         )
 
         # Langfuse로 답변 생성 기록
+        trace_id = None
         with self.langfuse.start_as_current_observation(
             as_type='generation',
             name=f"generation_{self.llm_config['name']}",
             model=self.llm_config['model_id'],
             input={"question": question, "context": context_text[:500] + "..." if len(context_text) > 500 else context_text},
-            metadata={"llm": self.llm_config['name'], "num_docs": len(docs)}
+            metadata={"llm": self.llm_config['name'], "num_docs": len(docs), "use_openrouter": use_openrouter}
         ) as generation:
             response = model.invoke(messages)
             answer = response.content
+
+            # trace_id 캡처
+            trace_id = generation.trace_id
 
             # 토큰 사용량 추출
             usage_dict = None
@@ -281,7 +293,7 @@ class ReportGenerator:
 
         print(f"✅ 답변 생성 완료\n")
 
-        return answer
+        return answer, trace_id
 
     def generate_report(self, questions: List[str], global_date_filter: Optional[tuple] = None) -> Dict[str, Any]:
         """보고서 생성
@@ -325,12 +337,13 @@ class ReportGenerator:
                 docs = self.retrieve_documents(question, date_filter)
 
                 # 문서가 없는 경우 처리
+                trace_id = None
                 if not docs:
                     answer = "해당 기간에 대한 문서를 찾을 수 없습니다."
                     title = "문서 없음"
                 else:
                     # 답변 생성 (Langfuse 자동 추적)
-                    answer = self.generate_answer(question, docs)
+                    answer, trace_id = self.generate_answer(question, docs)
 
                     # 제목 추출
                     title = self._extract_title_from_answer(answer)
@@ -340,6 +353,8 @@ class ReportGenerator:
                 if title:
                     print(f"📋 제목: {title}")
                 print(f"📝 답변:\n{answer}\n")
+                if trace_id:
+                    print(f"🔖 Trace ID: {trace_id}\n")
 
                 # 이미지 메타데이터 추출
                 images = []
@@ -369,6 +384,7 @@ class ReportGenerator:
                     "doc_titles": [doc.metadata.get('page_title', 'Unknown') for doc in docs],
                     "images": images,  # 이미지 정보 추가
                     "answer": answer,
+                    "trace_id": trace_id,  # trace_id 추가
                     "success": True
                 })
 

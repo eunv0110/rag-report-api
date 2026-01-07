@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
     pandoc \
     libreoffice \
     fonts-nanum \
-    fonts-nanum-coding \
     fonts-nanum-extra \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

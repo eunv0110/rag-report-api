@@ -135,6 +135,6 @@ PROMPT_FILE = "prompts/templates/data/qa_generation_prompt.txt"
 # ============================================================================
 # 디렉토리 생성
 # ============================================================================
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 Path(QDRANT_PATH).parent.mkdir(parents=True, exist_ok=True)

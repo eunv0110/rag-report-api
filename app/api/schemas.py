@@ -127,3 +127,37 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     timestamp: str
+
+
+class FeedbackRequest(BaseModel):
+    """사용자 피드백 요청"""
+    trace_id: str = Field(..., description="Langfuse Trace ID")
+    score: int = Field(..., ge=0, le=10, description="피드백 점수 (0-10, 0: 매우 나쁨, 10: 매우 좋음)")
+    comment: Optional[str] = Field(None, description="피드백 코멘트 (선택)")
+    feedback_type: Optional[str] = Field("user_satisfaction", description="피드백 타입 (user_satisfaction, accuracy, relevance 등)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "trace_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "score": 10,
+                "comment": "보고서 내용이 매우 정확하고 유용했습니다.",
+                "feedback_type": "user_satisfaction"
+            }
+        }
+
+
+class FeedbackResponse(BaseModel):
+    """피드백 저장 응답"""
+    code: int = Field(1, description="응답 코드 (1: 성공)")
+    message: str = Field("피드백이 저장되었습니다.", description="응답 메시지")
+    success: bool = Field(True, description="성공 여부")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "code": 1,
+                "message": "피드백이 저장되었습니다.",
+                "success": True
+            }
+        }

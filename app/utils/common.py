@@ -58,7 +58,8 @@ def generate_llm_answer(
     answer_generation_prompt: str,
     num_contexts: int = 5,
     temperature: float = 0.1,
-    max_tokens: int = 1000
+    max_tokens: int = 1000,
+    use_openrouter: bool = False
 ) -> str:
     """LLM API를 호출하여 답변 생성
 
@@ -70,24 +71,23 @@ def generate_llm_answer(
         num_contexts: 사용할 컨텍스트 개수
         temperature: 생성 온도
         max_tokens: 최대 토큰 수
+        use_openrouter: OpenRouter 사용 여부 (기본값: False)
 
     Returns:
         생성된 답변
     """
-    if not AZURE_AI_CREDENTIAL or not AZURE_AI_ENDPOINT:
-        return "Azure OpenAI 설정이 올바르지 않습니다. .env 파일을 확인하세요."
-
-    os.environ['AZURE_AI_CREDENTIAL'] = AZURE_AI_CREDENTIAL
-    os.environ['AZURE_AI_ENDPOINT'] = AZURE_AI_ENDPOINT
+    from app.utils.llm_factory import get_llm
 
     context_text = "\n\n".join(contexts[:num_contexts]) if contexts else "관련 문서를 찾을 수 없습니다."
     prompt = answer_generation_prompt.replace("{context}", context_text).replace("{question}", question)
 
     try:
-        model = init_chat_model(
-            "azure_ai:gpt-4.1",
+        model = get_llm(
+            model_id="azure_ai:gpt-4.1",
             temperature=temperature,
-            max_completion_tokens=max_tokens
+            max_tokens=max_tokens,
+            use_openrouter=use_openrouter,
+            model_name="gpt41"
         )
 
         messages = [

@@ -37,6 +37,9 @@ class MultiQueryRetriever(BaseRetriever):
     llm_model: str = "azure_ai:gpt-4.1"
     """사용할 LLM 모델"""
 
+    use_openrouter: bool = False
+    """OpenRouter 사용 여부"""
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -46,6 +49,7 @@ class MultiQueryRetriever(BaseRetriever):
         num_queries: int = 3,
         temperature: float = 0.7,
         llm_model: str = "azure_ai:gpt-4.1",
+        use_openrouter: bool = False,
         **kwargs
     ):
         """
@@ -54,19 +58,16 @@ class MultiQueryRetriever(BaseRetriever):
             num_queries: 생성할 쿼리 수 (기본값: 3)
             temperature: LLM temperature (기본값: 0.7)
             llm_model: 사용할 LLM 모델 (기본값: azure_ai:gpt-4.1)
+            use_openrouter: OpenRouter 사용 여부 (기본값: False)
         """
         super().__init__(
             base_retriever=base_retriever,
             num_queries=num_queries,
             temperature=temperature,
             llm_model=llm_model,
+            use_openrouter=use_openrouter,
             **kwargs
         )
-
-        # Azure OpenAI 설정
-        if AZURE_AI_CREDENTIAL and AZURE_AI_ENDPOINT:
-            os.environ['AZURE_AI_CREDENTIAL'] = AZURE_AI_CREDENTIAL
-            os.environ['AZURE_AI_ENDPOINT'] = AZURE_AI_ENDPOINT
 
     def generate_queries(self, query: str) -> List[str]:
         """
@@ -78,6 +79,8 @@ class MultiQueryRetriever(BaseRetriever):
         Returns:
             확장된 쿼리 리스트 (원본 포함)
         """
+        from app.utils.llm_factory import get_llm
+
         # 프롬프트 템플릿 로드
         prompt_template = load_prompt("prompts/templates/service/multiquery.txt")
         prompt = prompt_template.format(
@@ -86,10 +89,12 @@ class MultiQueryRetriever(BaseRetriever):
         )
 
         try:
-            model = init_chat_model(
-                self.llm_model,
+            model = get_llm(
+                model_id=self.llm_model,
                 temperature=self.temperature,
-                max_completion_tokens=300
+                max_tokens=300,
+                use_openrouter=self.use_openrouter,
+                model_name="gpt41"
             )
             response = model.invoke(prompt)
 
@@ -171,7 +176,8 @@ def get_multiquery_retriever(
     base_retriever: Optional[BaseRetriever] = None,
     num_queries: int = 3,
     temperature: float = 0.7,
-    k: int = 5
+    k: int = 5,
+    use_openrouter: bool = False
 ) -> MultiQueryRetriever:
     """
     MultiQuery Retriever 생성
@@ -181,6 +187,7 @@ def get_multiquery_retriever(
         num_queries: 생성할 쿼리 수
         temperature: LLM temperature
         k: 기본 리트리버에서 반환할 문서 수
+        use_openrouter: OpenRouter 사용 여부 (기본값: False)
 
     Returns:
         MultiQueryRetriever 인스턴스
@@ -193,7 +200,8 @@ def get_multiquery_retriever(
     retriever = MultiQueryRetriever(
         base_retriever=base_retriever,
         num_queries=num_queries,
-        temperature=temperature
+        temperature=temperature,
+        use_openrouter=use_openrouter
     )
 
     return retriever

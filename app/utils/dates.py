@@ -312,24 +312,26 @@ def extract_date_filter_from_question(question: str) -> Optional[Tuple[str, str]
     return None
 
 
-def parse_with_llm(date_input: str) -> Optional[Tuple[str, str]]:
+def parse_with_llm(date_input: str, use_openrouter: bool = False) -> Optional[Tuple[str, str]]:
     """
     LLM을 사용하여 자연어 날짜를 파싱합니다.
 
     예: "크리스마스 주", "연말", "여름 방학" 등
+
+    Args:
+        date_input: 자연어 날짜 표현
+        use_openrouter: OpenRouter 사용 여부 (기본값: False)
     """
     try:
-        from langchain.chat_models import init_chat_model
-        from app.config.settings import AZURE_AI_CREDENTIAL, AZURE_AI_ENDPOINT
+        from app.utils.llm_factory import get_llm
         import json
 
-        os.environ['AZURE_AI_CREDENTIAL'] = AZURE_AI_CREDENTIAL
-        os.environ['AZURE_AI_ENDPOINT'] = AZURE_AI_ENDPOINT
-
-        model = init_chat_model(
-            "azure_ai:gpt-4.1",
+        model = get_llm(
+            model_id="azure_ai:gpt-4.1",
             temperature=0,
-            max_completion_tokens=200
+            max_tokens=200,
+            use_openrouter=use_openrouter,
+            model_name="gpt41"
         )
 
         today = datetime.now().strftime("%Y-%m-%d")

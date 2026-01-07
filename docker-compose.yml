@@ -1,24 +1,4 @@
-version: '3.8'
-
 services:
-  # Qdrant Vector Database
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: rag-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - ./data/qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - rag-network
-
   # RAG Report Generator API
   api:
     build:
@@ -30,17 +10,13 @@ services:
     env_file:
       - .env
     environment:
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
       - API_HOST=0.0.0.0
       - API_PORT=8000
     volumes:
       - ./data:/app/data
       - ./app/prompts:/app/app/prompts
-    depends_on:
-      qdrant:
-        condition: service_healthy
-    restart: unless-stopped
+      - ./app/config:/app/app/config
+    restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -48,6 +24,26 @@ services:
       retries: 3
     networks:
       - rag-network
+
+  # Qdrant Vector Database (로컬 사용 시)
+  # Qdrant Cloud를 사용하는 경우 아래 주석을 유지하세요
+  # 로컬 Qdrant를 사용하려면 주석을 해제하고, api 서비스에 depends_on을 추가하세요
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   container_name: rag-qdrant
+  #   ports:
+  #     - "6333:6333"
+  #     - "6334:6334"
+  #   volumes:
+  #     - ./data/qdrant_data:/qdrant/storage
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   networks:
+  #     - rag-network
 
 networks:
   rag-network:

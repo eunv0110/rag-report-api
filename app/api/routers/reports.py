@@ -9,10 +9,11 @@ from typing import Dict, Any, Union
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
-from app.api.schemas import ReportRequest, ReportResponse
+from app.api.schemas import ReportRequest, ReportResponse, FeedbackRequest, FeedbackResponse
 from app.scripts.report_generator import ReportGenerator
 from app.scripts.document_generator import DocumentGenerator
 from app.utils.dates import parse_date_range
+from app.utils.langfuse import save_feedback
 
 router = APIRouter(tags=["Reports"])
 
@@ -163,6 +164,48 @@ async def generate_report(request: ReportRequest):
             }
 
             return JSONResponse(content=response_data)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=error_detail)
+
+
+@router.post("/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: FeedbackRequest):
+    """
+    보고서 피드백 제출 API
+
+    사용자가 생성된 보고서에 대한 피드백을 제출합니다.
+    피드백은 Langfuse에 저장되어 모델 성능 평가 및 개선에 활용됩니다.
+
+    - **trace_id**: Langfuse Trace ID (보고서 생성 시 반환된 ID)
+    - **score**: 피드백 점수 (0-10, 0: 매우 나쁨, 10: 매우 좋음)
+    - **comment**: 피드백 코멘트 (선택사항)
+    - **feedback_type**: 피드백 타입 (user_satisfaction, accuracy, relevance 등)
+    """
+    try:
+        # 피드백 저장
+        success = save_feedback(
+            trace_id=request.trace_id,
+            score=request.score,
+            comment=request.comment,
+            feedback_type=request.feedback_type
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="피드백 저장에 실패했습니다."
+            )
+
+        return FeedbackResponse(
+            code=1,
+            message="피드백이 저장되었습니다.",
+            success=True
+        )
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
