@@ -266,7 +266,7 @@ with chat_container:
     else:
         for i, msg in enumerate(st.session_state.messages):
             if msg["role"] == "user":
-                message(msg["content"], is_user=True, key=f"user_{i}", avatar_style="personas", seed=88)
+                message(msg["content"], is_user=True, key=f"user_{i}", avatar_style="big-smile", seed=456)
             elif msg["role"] == "assistant":
                 message(msg["content"], is_user=False, key=f"bot_{i}", avatar_style="bottts", seed=789)
 

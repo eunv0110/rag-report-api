@@ -14,7 +14,7 @@ from app.scripts.report_generator import ReportGenerator
 from app.scripts.document_generator import DocumentGenerator
 from app.utils.dates import parse_date_range
 
-router = APIRouter(prefix="/api/v1", tags=["Reports"])
+router = APIRouter(tags=["Reports"])
 
 
 def calculate_generation_cost(report_data: Dict[str, Any]) -> float:
