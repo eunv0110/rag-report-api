@@ -307,6 +307,3 @@ docker compose exec api fc-list | grep Nanum
 - [Docker Compose 문서](https://docs.docker.com/compose/)
 - [Qdrant 문서](https://qdrant.tech/documentation/)
 
-## 💬 문의
-
-문제가 발생하면 GitHub Issues에 등록해주세요.
