@@ -139,7 +139,8 @@ def parse_natural_language_date(date_input: str) -> Optional[Tuple[str, str]]:
             return get_week_of_month(month, week_num)
 
     # 6. LLM을 사용한 자연어 파싱 (fallback)
-    return parse_with_llm(date_input)
+    from app.config.settings import USE_OPENROUTER
+    return parse_with_llm(date_input, use_openrouter=USE_OPENROUTER)
 
 
 def get_this_week() -> Tuple[str, str]:

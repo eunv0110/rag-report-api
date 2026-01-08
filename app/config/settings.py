@@ -63,6 +63,9 @@ NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 DATA_SOURCE_ID = os.getenv("DATA_SOURCE_ID")
 NOTION_VERSION = os.getenv("NOTION_VERSION", "2025-09-03")
 
+# LLM Provider 설정
+USE_OPENROUTER = os.getenv("USE_OPENROUTER", "false").lower() in ("true", "1", "yes")
+
 # OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
