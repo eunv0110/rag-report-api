@@ -2,7 +2,7 @@
 
 자동화된 보고서 생성 시스템 - RAG(Retrieval-Augmented Generation) 기반
 
-## 🌟 주요 기능
+## 주요 기능
 
 - 📊 **자동 보고서 생성**: 주간/임원 보고서 자동 생성
 - 📄 **다양한 출력 형식**: JSON, Word(DOCX), PDF 지원
@@ -10,8 +10,6 @@
 - 🤖 **LLM 통합**: Azure AI, OpenRouter 등 다양한 LLM 지원
 - 📝 **Notion 연동**: Notion 데이터베이스에서 자동으로 데이터 수집
 - 📈 **모니터링**: Langfuse를 통한 LLM 호출 추적
-
-## 🚀 빠른 시작
 
 ### 1. Docker를 사용한 배포 (권장)
 
@@ -41,7 +39,7 @@ pip install -r requirements.txt
 uvicorn app.api.main:app --reload
 ```
 
-## 📡 API 사용법
+## API 사용법
 
 ### 보고서 생성 API
 
@@ -85,7 +83,7 @@ curl -X POST http://localhost:8000/generate-report \
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-## 🛠️ 기술 스택
+## 기술 스택
 
 - **Backend**: FastAPI, Python 3.12
 - **Vector DB**: Qdrant (Cloud 또는 Self-hosted)
@@ -94,12 +92,12 @@ curl -X POST http://localhost:8000/generate-report \
 - **Observability**: Langfuse
 - **Deployment**: Docker, Docker Compose
 
-## 📚 문서
+## 문서
 
 - [배포 가이드](DEPLOYMENT.md) - 상세한 배포 및 운영 가이드
 - [API 문서](http://localhost:8000/docs) - Swagger UI (서버 실행 후)
 
-## 🔧 환경 변수
+## 환경 변수
 
 필수 환경 변수:
 ```bash
@@ -119,7 +117,7 @@ QDRANT_API_KEY=your_api_key
 
 자세한 내용은 [.env.example](.env.example) 참고
 
-## 📊 프로젝트 구조
+## 프로젝트 구조
 
 ```
 rag-report-generator/
@@ -141,14 +139,3 @@ rag-report-generator/
 └── requirements.txt
 ```
 
-## 🤝 기여
-
-이슈 및 PR을 환영합니다!
-
-## 📄 라이선스
-
-MIT License
-
-## 📧 문의
-
-문제가 발생하면 GitHub Issues에 등록해주세요.
