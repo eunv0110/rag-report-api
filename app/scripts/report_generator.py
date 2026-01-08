@@ -256,40 +256,45 @@ class ReportGenerator:
             model_name=self.llm_config['name']
         )
 
-        # Langfuse로 답변 생성 기록
+        # Langfuse로 답변 생성 기록 (Langfuse가 활성화된 경우에만)
         trace_id = None
-        with self.langfuse.start_as_current_observation(
-            as_type='generation',
-            name=f"generation_{self.llm_config['name']}",
-            model=self.llm_config['model_id'],
-            input={"question": question, "context": context_text[:500] + "..." if len(context_text) > 500 else context_text},
-            metadata={"llm": self.llm_config['name'], "num_docs": len(docs), "use_openrouter": use_openrouter}
-        ) as generation:
+        if self.langfuse:
+            with self.langfuse.start_as_current_observation(
+                as_type='generation',
+                name=f"generation_{self.llm_config['name']}",
+                model=self.llm_config['model_id'],
+                input={"question": question, "context": context_text[:500] + "..." if len(context_text) > 500 else context_text},
+                metadata={"llm": self.llm_config['name'], "num_docs": len(docs), "use_openrouter": use_openrouter}
+            ) as generation:
+                response = model.invoke(messages)
+                answer = response.content
+
+                # trace_id 캡처
+                trace_id = generation.trace_id
+
+                # 토큰 사용량 추출
+                usage_dict = None
+                if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                    usage_dict = {
+                        "input": response.usage_metadata.get('input_tokens', 0),
+                        "output": response.usage_metadata.get('output_tokens', 0),
+                        "total": response.usage_metadata.get('total_tokens', 0)
+                    }
+
+                generation.update(
+                    output={"answer": answer},
+                    usage=usage_dict if usage_dict else None
+                )
+
+                # Trace 업데이트
+                self.langfuse.update_current_trace(
+                    tags=[f"{self.report_type}_report", self.retriever_config['name'], self.llm_config['name']],
+                    output={"answer": answer}
+                )
+        else:
+            # Langfuse가 비활성화된 경우 직접 LLM 호출
             response = model.invoke(messages)
             answer = response.content
-
-            # trace_id 캡처
-            trace_id = generation.trace_id
-
-            # 토큰 사용량 추출
-            usage_dict = None
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                usage_dict = {
-                    "input": response.usage_metadata.get('input_tokens', 0),
-                    "output": response.usage_metadata.get('output_tokens', 0),
-                    "total": response.usage_metadata.get('total_tokens', 0)
-                }
-
-            generation.update(
-                output={"answer": answer},
-                usage=usage_dict if usage_dict else None
-            )
-
-            # Trace 업데이트
-            self.langfuse.update_current_trace(
-                tags=[f"{self.report_type}_report", self.retriever_config['name'], self.llm_config['name']],
-                output={"answer": answer}
-            )
 
         print(f"✅ 답변 생성 완료\n")
 
@@ -399,8 +404,9 @@ class ReportGenerator:
                     "success": False
                 })
 
-        # Langfuse flush
-        self.langfuse.flush()
+        # Langfuse flush (활성화된 경우에만)
+        if self.langfuse:
+            self.langfuse.flush()
 
         report_data = {
             "report_type": self.report_type,

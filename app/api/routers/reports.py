@@ -42,7 +42,6 @@ async def generate_report(request: ReportRequest):
     """
     try:
         start_time = time.time()
-        trace_id = str(uuid.uuid4())
 
         # 날짜 필터 파싱
         date_filter = parse_date_range(
@@ -84,6 +83,17 @@ async def generate_report(request: ReportRequest):
         # 생성 시간 및 비용 계산
         generation_time = round(time.time() - start_time, 2)
         cost = calculate_generation_cost(report_data)
+
+        # Langfuse trace_id 추출 (첫 번째 성공한 결과의 trace_id 사용)
+        trace_id = None
+        for result in report_data.get('results', []):
+            if result.get('success', False) and result.get('trace_id'):
+                trace_id = result['trace_id']
+                break
+
+        # trace_id가 없으면 fallback으로 UUID 생성
+        if not trace_id:
+            trace_id = str(uuid.uuid4())
 
         # 메타데이터 구성
         metadata = {
